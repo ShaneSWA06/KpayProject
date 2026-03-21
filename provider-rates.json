@@ -1,0 +1,23 @@
+{
+  "defaults": {
+    "currency": "MMK",
+    "feeRatePercent": 0,
+    "costRatePercent": 0,
+    "fixedFeeMMK": 0,
+    "fixedCostMMK": 0
+  },
+  "providers": {
+    "Kpay": {
+      "feeRatePercent": 2.0,
+      "costRatePercent": 0.5,
+      "fixedFeeMMK": 0,
+      "fixedCostMMK": 0
+    },
+    "WavePay": {
+      "feeRatePercent": 2.5,
+      "costRatePercent": 0.8,
+      "fixedFeeMMK": 0,
+      "fixedCostMMK": 0
+    }
+  }
+}

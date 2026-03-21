@@ -1,0 +1,760 @@
+const THEME_KEY = "wallet-counter-pro-theme";
+const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:4173" : "";
+
+const state = {
+  transactions: [],
+  sessionUser: null,
+  theme: loadTheme(),
+  search: "",
+  filterType: "all",
+  modalOpen: false,
+  editingId: "",
+  authTab: "login",
+  loading: true
+};
+
+const app = document.getElementById("app");
+
+function loadTheme() {
+  try {
+    return window.localStorage.getItem(THEME_KEY) || "light";
+  } catch {
+    return "light";
+  }
+}
+
+function saveTheme(value) {
+  window.localStorage.setItem(THEME_KEY, value);
+}
+
+function render() {
+  document.body.setAttribute("data-theme", state.theme);
+
+  if (state.loading) {
+    app.innerHTML = `
+      <main class="auth-shell">
+        <section class="auth-hero">
+          <div class="brand-badge">Wallet Counter Pro</div>
+          <h1>Loading workspace</h1>
+          <p>Connecting to your data and preparing the dashboard.</p>
+        </section>
+        <section class="auth-card">
+          <div class="panel">
+            <p class="subtle">Please wait...</p>
+          </div>
+        </section>
+      </main>
+    `;
+    return;
+  }
+
+  const user = getCurrentUser();
+  app.innerHTML = user ? renderDashboard(user) : renderAuth();
+  bindEvents();
+}
+
+function getThemeIconSvg() {
+  if (state.theme === "dark") {
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2"></path>
+        <path d="M12 20v2"></path>
+        <path d="M4.93 4.93l1.41 1.41"></path>
+        <path d="M17.66 17.66l1.41 1.41"></path>
+        <path d="M2 12h2"></path>
+        <path d="M20 12h2"></path>
+        <path d="M4.93 19.07l1.41-1.41"></path>
+        <path d="M17.66 6.34l1.41-1.41"></path>
+      </svg>
+    `;
+  }
+
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path>
+    </svg>
+  `;
+}
+
+function getThemeButtonText() {
+  return state.theme === "dark" ? "Light mode" : "Dark mode";
+}
+
+function getThemeLabel() {
+  return state.theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
+}
+
+function renderAuth() {
+  return `
+    <main class="auth-shell">
+      <section class="auth-hero">
+        <div class="brand-badge">Wallet Counter Pro</div>
+        <h1>Counter app for KBZPay and WavePay teams</h1>
+        <p>
+          Sign in as admin or cashier, create daily transactions quickly, and keep profit visibility limited to admin accounts.
+        </p>
+        <div class="hero-points">
+          <div><strong>Admin</strong><span>Can view profit and full dashboard metrics</span></div>
+          <div><strong>Cashier</strong><span>Can create and manage transactions without profit visibility</span></div>
+        </div>
+      </section>
+
+      <section class="auth-card">
+        <div class="auth-topbar">
+          <div class="auth-tabs">
+            <button class="tab-button ${state.authTab === "login" ? "active" : ""}" data-auth-tab="login" type="button">Login</button>
+            <button class="tab-button ${state.authTab === "signup" ? "active" : ""}" data-auth-tab="signup" type="button">Sign Up</button>
+          </div>
+          <button id="themeToggleAuth" class="theme-toggle-button icon-only" type="button" aria-label="${getThemeLabel()}" title="${getThemeLabel()}">
+            <span class="theme-toggle-icon">${getThemeIconSvg()}</span>
+          </button>
+        </div>
+
+        <form id="loginForm" class="auth-form ${state.authTab === "login" ? "" : "hidden"}">
+          <h2>Welcome back</h2>
+          <p class="subtle">Sign in to continue to the counter dashboard.</p>
+          <label>
+            <span>Username</span>
+            <input id="loginUsername" type="text" required>
+          </label>
+          <label>
+            <span>Password</span>
+            <div class="password-field">
+              <input id="loginPassword" type="password" required>
+              <button class="password-toggle" data-password-toggle="loginPassword" type="button">Show</button>
+            </div>
+          </label>
+          <button class="primary-button auth-button" type="submit">Login</button>
+          <p id="loginMessage" class="form-message"></p>
+        </form>
+
+        <form id="signupForm" class="auth-form ${state.authTab === "signup" ? "" : "hidden"}">
+          <h2>Create account</h2>
+          <p class="subtle">New sign ups create cashier accounts only.</p>
+          <label>
+            <span>Full Name</span>
+            <input id="signupName" type="text" required>
+          </label>
+          <label>
+            <span>Username</span>
+            <input id="signupUsername" type="text" required>
+          </label>
+          <label>
+            <span>Password</span>
+            <div class="password-field">
+              <input id="signupPassword" type="password" required>
+              <button class="password-toggle" data-password-toggle="signupPassword" type="button">Show</button>
+            </div>
+          </label>
+          <button class="primary-button auth-button" type="submit">Create Account</button>
+          <p id="signupMessage" class="form-message"></p>
+        </form>
+      </section>
+    </main>
+  `;
+}
+
+function renderDashboard(user) {
+  const visibleTransactions = getVisibleTransactions();
+  const summary = summarizeTransactions(visibleTransactions);
+  const isAdmin = user.role === "admin";
+
+  return `
+    <div class="dashboard-shell">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="brand-badge">W</div>
+          <div>
+            <h2>Wallet Counter Pro</h2>
+            <p>KBZPay / WavePay counter team</p>
+          </div>
+        </div>
+
+        <div class="profile-card">
+          <span class="profile-role">${escapeHtml(user.role)}</span>
+          <strong>${escapeHtml(user.fullName)}</strong>
+          <small>@${escapeHtml(user.username)}</small>
+        </div>
+
+        <div class="menu-card">
+          <h3>Transaction Rules</h3>
+          <ul class="rule-list">
+            <li><strong>ငွေထုတ်</strong> under 100,000 MMK = 1% profit</li>
+            <li><strong>ငွေထုတ်</strong> 100,000 MMK and above = 0.5% profit</li>
+            <li><strong>ငွေသွင်း</strong> = 0.1% profit</li>
+          </ul>
+        </div>
+
+        <div class="menu-card">
+          <h3>Quick Filter</h3>
+          <button class="filter-chip ${state.filterType === "all" ? "active" : ""}" data-filter="all" type="button">All</button>
+          <button class="filter-chip ${state.filterType === "ငွေထုတ်" ? "active" : ""}" data-filter="ငွေထုတ်" type="button">ငွေထုတ်</button>
+          <button class="filter-chip ${state.filterType === "ငွေသွင်း" ? "active" : ""}" data-filter="ငွေသွင်း" type="button">ငွေသွင်း</button>
+        </div>
+
+        <button id="logoutButton" class="secondary-button full-width" type="button">Logout</button>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow dark">Operations Dashboard</p>
+            <h1>Daily Transactions</h1>
+            <p class="topbar-copy">Cashiers can create transactions. Admins can also view profit across the counter.</p>
+          </div>
+          <div class="topbar-tools">
+            <input id="searchInput" class="search-input" type="search" placeholder="Search by customer, phone, or user" value="${escapeHtml(state.search)}">
+            <button id="themeToggleDashboard" class="theme-toggle-button icon-only" type="button" aria-label="${getThemeLabel()}" title="${getThemeLabel()}">
+              <span class="theme-toggle-icon">${getThemeIconSvg()}</span>
+            </button>
+          </div>
+        </header>
+
+        <section class="stats-grid">
+          <article class="stat-card">
+            <span>Total Transactions</span>
+            <strong>${summary.count}</strong>
+          </article>
+          <article class="stat-card">
+            <span>Total Amount</span>
+            <strong>${formatCurrency(summary.amount)}</strong>
+          </article>
+          <article class="stat-card">
+            <span>ငွေထုတ် Amount</span>
+            <strong>${formatCurrency(summary.byType["ငွေထုတ်"] ? summary.byType["ငွေထုတ်"].amount : 0)}</strong>
+          </article>
+          <article class="stat-card">
+            <span>ငွေသွင်း Amount</span>
+            <strong>${formatCurrency(summary.byType["ငွေသွင်း"] ? summary.byType["ငွေသွင်း"].amount : 0)}</strong>
+          </article>
+          ${isAdmin ? `
+            <article class="stat-card accent">
+              <span>Total Profit</span>
+              <strong>${formatCurrency(summary.profit)}</strong>
+            </article>
+          ` : `
+            <article class="stat-card restricted">
+              <span>Profit</span>
+              <strong>Admin Only</strong>
+            </article>
+          `}
+        </section>
+
+        ${isAdmin ? `
+          <section class="panel compact-panel">
+            <div class="section-heading">
+              <h2>Profit By Transaction Type</h2>
+              <p>Visible only to admin accounts.</p>
+            </div>
+            <div class="type-summary-grid">
+              <article class="type-card">
+                <span>ငွေထုတ် Profit</span>
+                <strong>${formatCurrency(summary.byType["ငွေထုတ်"] ? summary.byType["ငွေထုတ်"].profit : 0)}</strong>
+              </article>
+              <article class="type-card">
+                <span>ငွေသွင်း Profit</span>
+                <strong>${formatCurrency(summary.byType["ငွေသွင်း"] ? summary.byType["ငွေသွင်း"].profit : 0)}</strong>
+              </article>
+            </div>
+          </section>
+        ` : ""}
+
+        <section class="panel">
+          <div class="section-heading">
+            <h2>Transaction List</h2>
+            <p>The plus button creates new transactions with name, amount, and optional phone number.</p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>Name</th>
+                  <th>Phone</th>
+                  <th>Amount</th>
+                  ${isAdmin ? "<th>Profit</th>" : ""}
+                  <th>Created By</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${renderTransactionRows(visibleTransactions, isAdmin)}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+
+      <button id="openModalButton" class="fab" type="button" aria-label="Create transaction">+</button>
+
+      <div class="modal-backdrop ${state.modalOpen ? "visible" : ""}" id="modalBackdrop">
+        <section class="modal-card">
+          <div class="modal-header">
+            <div>
+              <p class="eyebrow dark">New Counter Transaction</p>
+              <h2>${state.editingId ? "Edit Transaction" : "Create Transaction"}</h2>
+            </div>
+            <button id="closeModalButton" class="icon-button" type="button">x</button>
+          </div>
+
+          <form id="transactionForm" class="modal-form">
+            <input id="transactionId" type="hidden" value="${escapeHtml(state.editingId)}">
+            <label>
+              <span>Transaction Type</span>
+              <select id="transactionType" required>
+                <option value="ငွေထုတ်">ငွေထုတ်</option>
+                <option value="ငွေသွင်း">ငွေသွင်း</option>
+              </select>
+            </label>
+            <label>
+              <span>Name</span>
+              <input id="customerName" type="text" required placeholder="Customer name">
+            </label>
+            <label>
+              <span>Money (MMK)</span>
+              <input id="amount" type="number" min="0" step="0.01" required placeholder="Enter amount">
+            </label>
+            <label>
+              <span>Phone Number (Optional)</span>
+              <input id="phoneNumber" type="text" placeholder="09xxxxxxxxx">
+            </label>
+            <div class="preview-card">
+              <span>Profit Rule Preview</span>
+              <strong id="profitPreview">${isAdmin ? "0.00 MMK" : "Admin Only"}</strong>
+            </div>
+            <button class="primary-button full-width" type="submit">${state.editingId ? "Update Transaction" : "Save Transaction"}</button>
+            <p id="transactionMessage" class="form-message"></p>
+          </form>
+        </section>
+      </div>
+    </div>
+  `;
+}
+
+function renderTransactionRows(items, isAdmin) {
+  if (!items.length) {
+    return `<tr class="empty-row"><td colspan="${isAdmin ? 8 : 7}">No transactions yet. Click the plus button to create one.</td></tr>`;
+  }
+
+  return items.map((tx) => `
+    <tr>
+      <td data-label="Date">${escapeHtml(tx.createdAt)}</td>
+      <td data-label="Type"><span class="type-badge ${tx.type === "ငွေထုတ်" ? "withdraw" : "deposit"}">${escapeHtml(tx.type)}</span></td>
+      <td data-label="Name">${escapeHtml(tx.customerName)}</td>
+      <td data-label="Phone">${escapeHtml(tx.phoneNumber || "-")}</td>
+      <td data-label="Amount">${formatCurrency(tx.amount)}</td>
+      ${isAdmin ? `<td data-label="Profit" class="money-positive">${formatCurrency(tx.profit)}</td>` : ""}
+      <td data-label="Created By">${escapeHtml(tx.createdByName)}</td>
+      <td data-label="Action">
+        <div class="row-actions">
+          <button class="mini-button" data-action="edit" data-id="${escapeHtml(tx.id)}" type="button">Edit</button>
+          <button class="mini-button danger" data-action="delete" data-id="${escapeHtml(tx.id)}" type="button">Delete</button>
+        </div>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function bindEvents() {
+  bindAuthEvents();
+  bindDashboardEvents();
+}
+
+function bindAuthEvents() {
+  const loginForm = document.getElementById("loginForm");
+  const signupForm = document.getElementById("signupForm");
+  const themeToggleAuth = document.getElementById("themeToggleAuth");
+  const passwordToggles = document.querySelectorAll("[data-password-toggle]");
+
+  document.querySelectorAll("[data-auth-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.authTab = button.dataset.authTab;
+      render();
+    });
+  });
+
+  passwordToggles.forEach((button) => {
+    button.addEventListener("click", () => {
+      const input = document.getElementById(button.dataset.passwordToggle);
+      if (!input) {
+        return;
+      }
+
+      const visible = input.type === "text";
+      input.type = visible ? "password" : "text";
+      button.textContent = visible ? "Show" : "Hide";
+    });
+  });
+
+  if (loginForm) {
+    loginForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const username = normalizeText(document.getElementById("loginUsername").value);
+      const password = document.getElementById("loginPassword").value;
+      const message = document.getElementById("loginMessage");
+
+      message.textContent = "";
+
+      try {
+        const payload = await api("/api/login", {
+          method: "POST",
+          body: JSON.stringify({ username, password })
+        });
+
+        state.sessionUser = payload.user;
+        state.transactions = payload.transactions;
+        state.modalOpen = false;
+        state.editingId = "";
+        render();
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+  }
+
+  if (signupForm) {
+    signupForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const fullName = document.getElementById("signupName").value.trim();
+      const username = document.getElementById("signupUsername").value.trim();
+      const password = document.getElementById("signupPassword").value;
+      const message = document.getElementById("signupMessage");
+
+      message.textContent = "";
+
+      try {
+        const payload = await api("/api/signup", {
+          method: "POST",
+          body: JSON.stringify({ fullName, username, password })
+        });
+
+        message.textContent = payload.message;
+        signupForm.reset();
+        state.authTab = "login";
+        setTimeout(() => render(), 350);
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+  }
+
+  if (themeToggleAuth) {
+    themeToggleAuth.addEventListener("click", toggleTheme);
+  }
+}
+
+function bindDashboardEvents() {
+  const user = getCurrentUser();
+  if (!user) {
+    return;
+  }
+
+  const logoutButton = document.getElementById("logoutButton");
+  const openModalButton = document.getElementById("openModalButton");
+  const closeModalButton = document.getElementById("closeModalButton");
+  const modalBackdrop = document.getElementById("modalBackdrop");
+  const transactionForm = document.getElementById("transactionForm");
+  const searchInput = document.getElementById("searchInput");
+  const themeToggleDashboard = document.getElementById("themeToggleDashboard");
+  const typeSelect = document.getElementById("transactionType");
+  const amountInput = document.getElementById("amount");
+
+  document.querySelectorAll("[data-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.filterType = button.dataset.filter;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-action]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const id = button.dataset.id;
+      const action = button.dataset.action;
+
+      if (action === "delete") {
+        try {
+          await api(`/api/transactions/${encodeURIComponent(id)}`, { method: "DELETE" });
+          state.transactions = state.transactions.filter((tx) => tx.id !== id);
+          render();
+        } catch (error) {
+          window.alert(error.message);
+        }
+      }
+
+      if (action === "edit") {
+        const tx = state.transactions.find((item) => item.id === id);
+        if (!tx) {
+          return;
+        }
+
+        state.modalOpen = true;
+        state.editingId = tx.id;
+        render();
+        document.getElementById("transactionType").value = tx.type;
+        document.getElementById("customerName").value = tx.customerName;
+        document.getElementById("amount").value = tx.amount;
+        document.getElementById("phoneNumber").value = tx.phoneNumber || "";
+        updateProfitPreview();
+      }
+    });
+  });
+
+  if (logoutButton) {
+    logoutButton.addEventListener("click", async () => {
+      try {
+        await api("/api/logout", { method: "POST" });
+      } finally {
+        state.sessionUser = null;
+        state.transactions = [];
+        state.modalOpen = false;
+        state.editingId = "";
+        render();
+      }
+    });
+  }
+
+  if (openModalButton) {
+    openModalButton.addEventListener("click", () => {
+      state.modalOpen = true;
+      state.editingId = "";
+      render();
+      updateProfitPreview();
+    });
+  }
+
+  if (closeModalButton) {
+    closeModalButton.addEventListener("click", closeModal);
+  }
+
+  if (modalBackdrop) {
+    modalBackdrop.addEventListener("click", (event) => {
+      if (event.target === modalBackdrop) {
+        closeModal();
+      }
+    });
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener("input", (event) => {
+      state.search = event.target.value;
+      render();
+    });
+  }
+
+  if (themeToggleDashboard) {
+    themeToggleDashboard.addEventListener("click", toggleTheme);
+  }
+
+  if (typeSelect) {
+    typeSelect.addEventListener("change", updateProfitPreview);
+  }
+
+  if (amountInput) {
+    amountInput.addEventListener("input", updateProfitPreview);
+  }
+
+  if (transactionForm) {
+    transactionForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const type = document.getElementById("transactionType").value;
+      const customerName = document.getElementById("customerName").value.trim();
+      const amount = toNumber(document.getElementById("amount").value);
+      const phoneNumber = document.getElementById("phoneNumber").value.trim();
+      const message = document.getElementById("transactionMessage");
+
+      if (!customerName || amount <= 0) {
+        message.textContent = "Name and money are required.";
+        return;
+      }
+
+      message.textContent = "";
+
+      try {
+        const endpoint = state.editingId
+          ? `/api/transactions/${encodeURIComponent(state.editingId)}`
+          : "/api/transactions";
+        const method = state.editingId ? "PUT" : "POST";
+        const payload = await api(endpoint, {
+          method,
+          body: JSON.stringify({ type, customerName, amount, phoneNumber })
+        });
+
+        if (state.editingId) {
+          state.transactions = state.transactions.map((tx) => (
+            tx.id === payload.transaction.id ? payload.transaction : tx
+          ));
+        } else {
+          state.transactions.unshift(payload.transaction);
+        }
+
+        closeModal();
+        render();
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+  }
+
+  updateProfitPreview();
+}
+
+function closeModal() {
+  state.modalOpen = false;
+  state.editingId = "";
+  render();
+}
+
+function toggleTheme() {
+  document.body.classList.add("theme-switching");
+  state.theme = state.theme === "dark" ? "light" : "dark";
+  saveTheme(state.theme);
+  render();
+  window.setTimeout(() => {
+    document.body.classList.remove("theme-switching");
+  }, 420);
+}
+
+function updateProfitPreview() {
+  const user = getCurrentUser();
+  const preview = document.getElementById("profitPreview");
+  const typeInput = document.getElementById("transactionType");
+  const amountInput = document.getElementById("amount");
+
+  if (!preview || !typeInput || !amountInput) {
+    return;
+  }
+
+  if (!user || user.role !== "admin") {
+    preview.textContent = "Admin Only";
+    return;
+  }
+
+  preview.textContent = formatCurrency(calculateProfit(typeInput.value, amountInput.value));
+}
+
+function getCurrentUser() {
+  return state.sessionUser;
+}
+
+function getVisibleTransactions() {
+  return state.transactions
+    .filter((tx) => {
+      const typeMatch = state.filterType === "all" || tx.type === state.filterType;
+      const haystack = normalizeText(`${tx.customerName} ${tx.phoneNumber} ${tx.type} ${tx.createdByName}`);
+      const searchMatch = !state.search || haystack.includes(normalizeText(state.search));
+      return typeMatch && searchMatch;
+    })
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+function summarizeTransactions(items) {
+  return items.reduce((summary, tx) => {
+    const amount = toNumber(tx.amount);
+    const profit = toNumber(tx.profit);
+
+    summary.count += 1;
+    summary.amount += amount;
+    summary.profit += profit;
+
+    if (!summary.byType[tx.type]) {
+      summary.byType[tx.type] = { count: 0, amount: 0, profit: 0 };
+    }
+
+    summary.byType[tx.type].count += 1;
+    summary.byType[tx.type].amount += amount;
+    summary.byType[tx.type].profit += profit;
+    return summary;
+  }, {
+    count: 0,
+    amount: 0,
+    profit: 0,
+    byType: {}
+  });
+}
+
+async function hydrateSession() {
+  try {
+    const payload = await api("/api/session");
+    state.sessionUser = payload.user;
+    state.transactions = payload.transactions || [];
+  } catch {
+    state.sessionUser = null;
+    state.transactions = [];
+  } finally {
+    state.loading = false;
+    render();
+  }
+}
+
+async function api(url, options = {}) {
+  let response;
+
+  try {
+    response = await fetch(`${API_BASE}${url}`, {
+      method: options.method || "GET",
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {})
+      },
+      credentials: API_BASE ? "include" : "same-origin",
+      body: options.body
+    });
+  } catch (error) {
+    throw new Error("Cannot reach the server. Open the app from http://127.0.0.1:4173 or make sure npm start is running.");
+  }
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.message || "Request failed.");
+  }
+
+  return payload;
+}
+
+function toNumber(value) {
+  if (value === undefined || value === null || value === "") {
+    return 0;
+  }
+
+  const numeric = Number(String(value).replace(/,/g, "").replace(/[^\d.-]/g, ""));
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function formatCurrency(value) {
+  return `${new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(value)} MMK`;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function normalizeText(value) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function calculateProfit(type, amount) {
+  const numericAmount = toNumber(amount);
+
+  if (type === "ငွေထုတ်") {
+    return numericAmount < 100000 ? numericAmount * 0.01 : numericAmount * 0.005;
+  }
+
+  if (type === "ငွေသွင်း") {
+    return numericAmount * 0.001;
+  }
+
+  return 0;
+}
+
+render();
+hydrateSession();
