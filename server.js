@@ -8,6 +8,7 @@ loadEnvFile(path.join(__dirname, ".env"));
 
 const HOST = process.env.HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT || 4173);
+const APP_TIME_ZONE = process.env.APP_TIME_ZONE || "Asia/Yangon";
 const root = __dirname;
 const sessions = new Map();
 
@@ -580,12 +581,26 @@ function hashPassword(password) {
 }
 
 function nowStamp() {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).formatToParts(new Date()).reduce((acc, part) => {
+    if (part.type !== "literal") {
+      acc[part.type] = part.value;
+    }
+    return acc;
+  }, {});
+
+  const year = parts.year;
+  const month = parts.month;
+  const day = parts.day;
+  const hours = parts.hour;
+  const minutes = parts.minute;
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
 

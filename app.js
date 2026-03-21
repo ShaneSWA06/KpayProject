@@ -1,5 +1,6 @@
 const THEME_KEY = "wallet-counter-pro-theme";
 const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:4173" : "";
+const APP_TIME_ZONE = "Asia/Yangon";
 
 const state = {
   transactions: [],
@@ -758,11 +759,25 @@ function getDateProfitTransactions(items) {
 }
 
 function getTodayDatePrefix() {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return getDatePartsInAppTimeZone().date;
+}
+
+function getDatePartsInAppTimeZone() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date()).reduce((acc, part) => {
+    if (part.type !== "literal") {
+      acc[part.type] = part.value;
+    }
+    return acc;
+  }, {});
+
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`
+  };
 }
 
 function getDateProfitLabel() {
