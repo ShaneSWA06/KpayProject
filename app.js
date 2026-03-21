@@ -2,7 +2,6 @@ const THEME_KEY = "wallet-counter-pro-theme";
 const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:4173" : "";
 const TRANSACTIONS_PER_PAGE = 10;
 const APP_TIME_ZONE = "Asia/Yangon";
-const SEARCH_RENDER_DELAY_MS = 400;
 
 const state = {
   transactions: [],
@@ -19,7 +18,6 @@ const state = {
 };
 
 const app = document.getElementById("app");
-let searchRenderTimeout = null;
 
 function loadTheme() {
   try {
@@ -233,6 +231,20 @@ function renderDashboard(user) {
           </div>
           <div class="topbar-tools">
             <input id="searchInput" class="search-input" type="search" placeholder="Search by customer, phone, or user" value="${escapeHtml(state.search)}">
+            <button
+              id="dateFilterToggleButton"
+              class="icon-button date-filter-toggle ${state.filterDate ? "active" : ""}"
+              type="button"
+              aria-label="${state.filterDate ? `Change date filter from ${escapeHtml(state.filterDate)}` : "Open date filter"}"
+              title="${state.filterDate ? `Date filter: ${escapeHtml(state.filterDate)}` : "Filter by date"}"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3" y="5" width="18" height="16" rx="2"></rect>
+                <path d="M16 3v4"></path>
+                <path d="M8 3v4"></path>
+                <path d="M3 10h18"></path>
+              </svg>
+            </button>
             <input id="dateFilterInput" class="date-filter-input" type="date" value="${escapeHtml(state.filterDate)}">
             <button id="clearDateFilterButton" class="secondary-button ${state.filterDate ? "" : "hidden"}" type="button">Clear Date</button>
           </div>
@@ -518,6 +530,7 @@ function bindDashboardEvents() {
   const modalBackdrop = document.getElementById("modalBackdrop");
   const transactionForm = document.getElementById("transactionForm");
   const searchInput = document.getElementById("searchInput");
+  const dateFilterToggleButton = document.getElementById("dateFilterToggleButton");
   const dateFilterInput = document.getElementById("dateFilterInput");
   const clearDateFilterButton = document.getElementById("clearDateFilterButton");
   const themeToggleDashboard = document.getElementById("themeToggleDashboard");
@@ -615,16 +628,20 @@ function bindDashboardEvents() {
 
   if (searchInput) {
     searchInput.addEventListener("input", (event) => {
-      state.search = event.target.value;
-      state.currentPage = 1;
-      if (searchRenderTimeout) {
-        window.clearTimeout(searchRenderTimeout);
-      }
-
-      searchRenderTimeout = window.setTimeout(() => {
-        searchRenderTimeout = null;
+      const nextValue = event.target.value;
+      if (!nextValue.trim()) {
+        state.search = "";
         render();
-      }, SEARCH_RENDER_DELAY_MS);
+      }
+    });
+
+    searchInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        state.search = event.target.value.trim();
+        state.currentPage = 1;
+        render();
+      }
     });
   }
 
@@ -633,6 +650,17 @@ function bindDashboardEvents() {
       state.filterDate = event.target.value;
       state.currentPage = 1;
       render();
+    });
+  }
+
+  if (dateFilterToggleButton && dateFilterInput) {
+    dateFilterToggleButton.addEventListener("click", () => {
+      if (typeof dateFilterInput.showPicker === "function") {
+        dateFilterInput.showPicker();
+        return;
+      }
+
+      dateFilterInput.click();
     });
   }
 
