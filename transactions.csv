@@ -1,4 +1,0 @@
-date,provider,transaction_type,customer_name,reference,amount_mmks,fee_rate_percent,cost_rate_percent,fixed_fee_mmks,fixed_cost_mmks,notes
-2026-03-20,Kpay,Cash In,Customer A,KP-0001,50000,2.0,0.5,0,0,Sample Kpay cash in
-2026-03-20,WavePay,Cash Out,Customer B,WP-0001,80000,2.5,0.8,0,0,Sample WavePay cash out
-2026-03-20,Kpay,Transfer,Customer C,KP-0002,120000,1.8,0.4,500,100,Sample transfer

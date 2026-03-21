@@ -2,6 +2,7 @@ const THEME_KEY = "wallet-counter-pro-theme";
 const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:4173" : "";
 const TRANSACTIONS_PER_PAGE = 10;
 const APP_TIME_ZONE = "Asia/Yangon";
+const SEARCH_RENDER_DELAY_MS = 400;
 
 const state = {
   transactions: [],
@@ -18,6 +19,7 @@ const state = {
 };
 
 const app = document.getElementById("app");
+let searchRenderTimeout = null;
 
 function loadTheme() {
   try {
@@ -615,7 +617,14 @@ function bindDashboardEvents() {
     searchInput.addEventListener("input", (event) => {
       state.search = event.target.value;
       state.currentPage = 1;
-      render();
+      if (searchRenderTimeout) {
+        window.clearTimeout(searchRenderTimeout);
+      }
+
+      searchRenderTimeout = window.setTimeout(() => {
+        searchRenderTimeout = null;
+        render();
+      }, SEARCH_RENDER_DELAY_MS);
     });
   }
 

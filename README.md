@@ -49,6 +49,16 @@ Then open `http://127.0.0.1:4173`
 
 If your local `.env` sets a different `PORT`, open that port instead.
 
+## Backup
+
+You can create a local backup of `users` and `transactions` anytime with:
+
+```powershell
+npm run backup
+```
+
+This exports both JSON and CSV files into a timestamped folder inside `backups/`, so the data can be opened directly in Excel.
+
 ## Image OCR Import
 
 The app now uses free local OCR via `tesseract.js`, so no paid API key is required.
