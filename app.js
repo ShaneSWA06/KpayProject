@@ -326,10 +326,11 @@ function renderDashboard(user) {
             <input id="transactionId" type="hidden" value="${escapeHtml(state.editingId)}">
             <label>
               <span>Transaction Type</span>
-              <select id="transactionType" required>
-                <option value="ငွေထုတ်">ငွေထုတ်</option>
-                <option value="ငွေသွင်း">ငွေသွင်း</option>
-              </select>
+              <input id="transactionType" type="hidden" value="ငွေထုတ်">
+              <div class="type-toggle-group" role="radiogroup" aria-label="Transaction Type">
+                <button class="type-toggle-button active" data-transaction-type="ငွေထုတ်" aria-pressed="true" type="button">ငွေထုတ်</button>
+                <button class="type-toggle-button" data-transaction-type="ငွေသွင်း" aria-pressed="false" type="button">ငွေသွင်း</button>
+              </div>
             </label>
             <label>
               <span>Name</span>
@@ -484,6 +485,7 @@ function bindDashboardEvents() {
   const clearDateFilterButton = document.getElementById("clearDateFilterButton");
   const themeToggleDashboard = document.getElementById("themeToggleDashboard");
   const typeSelect = document.getElementById("transactionType");
+  const typeToggleButtons = document.querySelectorAll("[data-transaction-type]");
   const amountInput = document.getElementById("amount");
   const tableFilterAll = document.getElementById("tableFilterAll");
   const tableFilterWithdraw = document.getElementById("tableFilterWithdraw");
@@ -527,7 +529,7 @@ function bindDashboardEvents() {
         state.modalOpen = true;
         state.editingId = tx.id;
         render();
-        document.getElementById("transactionType").value = tx.type;
+        setTransactionType(tx.type);
         document.getElementById("customerName").value = tx.customerName;
         document.getElementById("amount").value = tx.amount;
         document.getElementById("phoneNumber").value = tx.phoneNumber || "";
@@ -552,10 +554,7 @@ function bindDashboardEvents() {
 
   if (openModalButton) {
     openModalButton.addEventListener("click", () => {
-      state.modalOpen = true;
-      state.editingId = "";
-      render();
-      updateProfitPreview();
+      openCreateModal();
     });
   }
 
@@ -617,8 +616,15 @@ function bindDashboardEvents() {
     themeToggleDashboard.addEventListener("click", toggleTheme);
   }
 
+  typeToggleButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      setTransactionType(button.dataset.transactionType);
+      updateProfitPreview();
+    });
+  });
+
   if (typeSelect) {
-    typeSelect.addEventListener("change", updateProfitPreview);
+    updateTransactionTypeButtons(typeSelect.value);
   }
 
   if (amountInput) {
@@ -676,6 +682,45 @@ function closeModal() {
   render();
 }
 
+function openCreateModal() {
+  state.modalOpen = true;
+  state.editingId = "";
+
+  const modalBackdrop = document.getElementById("modalBackdrop");
+  const transactionForm = document.getElementById("transactionForm");
+  const transactionId = document.getElementById("transactionId");
+  const transactionType = document.getElementById("transactionType");
+  const customerName = document.getElementById("customerName");
+  const amount = document.getElementById("amount");
+  const phoneNumber = document.getElementById("phoneNumber");
+  const message = document.getElementById("transactionMessage");
+
+  if (!modalBackdrop || !transactionForm || !transactionType || !customerName || !amount || !phoneNumber) {
+    render();
+    updateProfitPreview();
+    return;
+  }
+
+  transactionForm.reset();
+  if (transactionId) {
+    transactionId.value = "";
+  }
+  transactionType.value = "ငွေထုတ်";
+  customerName.value = "";
+  amount.value = "";
+  phoneNumber.value = "";
+  if (message) {
+    message.textContent = "";
+  }
+
+  modalBackdrop.classList.add("visible");
+
+  window.requestAnimationFrame(() => {
+    updateProfitPreview();
+    customerName.focus({ preventScroll: true });
+  });
+}
+
 function toggleTheme() {
   document.body.classList.add("theme-switching");
   state.theme = state.theme === "dark" ? "light" : "dark";
@@ -702,6 +747,24 @@ function updateProfitPreview() {
   }
 
   preview.textContent = formatCurrency(calculateProfit(typeInput.value, amountInput.value));
+}
+
+function setTransactionType(type) {
+  const input = document.getElementById("transactionType");
+  if (!input) {
+    return;
+  }
+
+  input.value = type;
+  updateTransactionTypeButtons(type);
+}
+
+function updateTransactionTypeButtons(activeType) {
+  document.querySelectorAll("[data-transaction-type]").forEach((button) => {
+    const isActive = button.dataset.transactionType === activeType;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
 }
 
 function getCurrentUser() {
