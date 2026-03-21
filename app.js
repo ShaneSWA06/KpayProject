@@ -6,6 +6,7 @@ const state = {
   sessionUser: null,
   theme: loadTheme(),
   search: "",
+  filterDate: "",
   filterType: "all",
   modalOpen: false,
   editingId: "",
@@ -158,6 +159,8 @@ function renderAuth() {
 function renderDashboard(user) {
   const visibleTransactions = getVisibleTransactions();
   const summary = summarizeTransactions(visibleTransactions);
+  const dateProfitSummary = summarizeTransactions(getDateProfitTransactions(visibleTransactions));
+  const dateProfitLabel = getDateProfitLabel();
   const isAdmin = user.role === "admin";
 
   return `
@@ -177,14 +180,16 @@ function renderDashboard(user) {
           <small>@${escapeHtml(user.username)}</small>
         </div>
 
-        <div class="menu-card">
-          <h3>Transaction Rules</h3>
-          <ul class="rule-list">
-            <li><strong>ငွေထုတ်</strong> under 100,000 MMK = 1% profit</li>
-            <li><strong>ငွေထုတ်</strong> 100,000 MMK and above = 0.5% profit</li>
-            <li><strong>ငွေသွင်း</strong> = 0.1% profit</li>
-          </ul>
-        </div>
+        ${isAdmin ? `
+          <div class="menu-card">
+            <h3>Transaction Rules</h3>
+            <ul class="rule-list">
+              <li><strong>ငွေထုတ်</strong> under 100,000 MMK = 1% profit</li>
+              <li><strong>ငွေထုတ်</strong> 100,000 MMK and above = 0.5% profit</li>
+              <li><strong>ငွေသွင်း</strong> = 0.1% profit</li>
+            </ul>
+          </div>
+        ` : ""}
 
         <div class="menu-card">
           <h3>Quick Filter</h3>
@@ -193,21 +198,27 @@ function renderDashboard(user) {
           <button class="filter-chip ${state.filterType === "ငွေသွင်း" ? "active" : ""}" data-filter="ငွေသွင်း" type="button">ငွေသွင်း</button>
         </div>
 
-        <button id="logoutButton" class="secondary-button full-width" type="button">Logout</button>
       </aside>
 
       <main class="content">
         <header class="topbar">
-          <div>
-            <p class="eyebrow dark">Operations Dashboard</p>
-            <h1>Daily Transactions</h1>
-            <p class="topbar-copy">Cashiers can create transactions. Admins can also view profit across the counter.</p>
+          <div class="topbar-main">
+            <div class="topbar-heading">
+              <p class="eyebrow dark">Operations Dashboard</p>
+              <h1>Daily Transactions</h1>
+              <p class="topbar-copy">Cashiers can create transactions. Admins can also view profit across the counter.</p>
+            </div>
+            <div class="topbar-actions">
+              <button id="themeToggleDashboard" class="theme-toggle-button icon-only" type="button" aria-label="${getThemeLabel()}" title="${getThemeLabel()}">
+                <span class="theme-toggle-icon">${getThemeIconSvg()}</span>
+              </button>
+              <button id="headerLogoutButton" class="secondary-button danger-button mobile-only-button" type="button">Logout</button>
+            </div>
           </div>
           <div class="topbar-tools">
             <input id="searchInput" class="search-input" type="search" placeholder="Search by customer, phone, or user" value="${escapeHtml(state.search)}">
-            <button id="themeToggleDashboard" class="theme-toggle-button icon-only" type="button" aria-label="${getThemeLabel()}" title="${getThemeLabel()}">
-              <span class="theme-toggle-icon">${getThemeIconSvg()}</span>
-            </button>
+            <input id="dateFilterInput" class="date-filter-input" type="date" value="${escapeHtml(state.filterDate)}">
+            <button id="clearDateFilterButton" class="secondary-button ${state.filterDate ? "" : "hidden"}" type="button">Clear Date</button>
           </div>
         </header>
 
@@ -228,6 +239,10 @@ function renderDashboard(user) {
             <span>ငွေသွင်း Amount</span>
             <strong>${formatCurrency(summary.byType["ငွေသွင်း"] ? summary.byType["ငွေသွင်း"].amount : 0)}</strong>
           </article>
+          <article class="stat-card accent">
+            <span>${escapeHtml(dateProfitLabel)}</span>
+            <strong>${isAdmin ? formatCurrency(dateProfitSummary.profit) : "Admin Only"}</strong>
+          </article>
           ${isAdmin ? `
             <article class="stat-card accent">
               <span>Total Profit</span>
@@ -235,7 +250,7 @@ function renderDashboard(user) {
             </article>
           ` : `
             <article class="stat-card restricted">
-              <span>Profit</span>
+              <span>Total Profit</span>
               <strong>Admin Only</strong>
             </article>
           `}
@@ -264,6 +279,13 @@ function renderDashboard(user) {
           <div class="section-heading">
             <h2>Transaction List</h2>
             <p>The plus button creates new transactions with name, amount, and optional phone number.</p>
+          </div>
+          <div class="table-toolbar">
+            <div class="table-filter-group">
+              <button id="tableFilterAll" class="mini-button ${state.filterType === "all" ? "active-filter" : ""}" type="button">All</button>
+              <button id="tableFilterWithdraw" class="mini-button ${state.filterType === "ငွေထုတ်" ? "active-filter" : ""}" type="button">ငွေထုတ်</button>
+              <button id="tableFilterDeposit" class="mini-button ${state.filterType === "ငွေသွင်း" ? "active-filter" : ""}" type="button">ငွေသွင်း</button>
+            </div>
           </div>
           <div class="table-wrap">
             <table>
@@ -451,15 +473,20 @@ function bindDashboardEvents() {
     return;
   }
 
-  const logoutButton = document.getElementById("logoutButton");
+  const headerLogoutButton = document.getElementById("headerLogoutButton");
   const openModalButton = document.getElementById("openModalButton");
   const closeModalButton = document.getElementById("closeModalButton");
   const modalBackdrop = document.getElementById("modalBackdrop");
   const transactionForm = document.getElementById("transactionForm");
   const searchInput = document.getElementById("searchInput");
+  const dateFilterInput = document.getElementById("dateFilterInput");
+  const clearDateFilterButton = document.getElementById("clearDateFilterButton");
   const themeToggleDashboard = document.getElementById("themeToggleDashboard");
   const typeSelect = document.getElementById("transactionType");
   const amountInput = document.getElementById("amount");
+  const tableFilterAll = document.getElementById("tableFilterAll");
+  const tableFilterWithdraw = document.getElementById("tableFilterWithdraw");
+  const tableFilterDeposit = document.getElementById("tableFilterDeposit");
 
   document.querySelectorAll("[data-filter]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -474,6 +501,13 @@ function bindDashboardEvents() {
       const action = button.dataset.action;
 
       if (action === "delete") {
+        const tx = state.transactions.find((item) => item.id === id);
+        const label = tx ? `${tx.customerName} (${formatCurrency(tx.amount)})` : "this transaction";
+        const confirmed = window.confirm(`Are you sure you want to delete ${label}?`);
+        if (!confirmed) {
+          return;
+        }
+
         try {
           await api(`/api/transactions/${encodeURIComponent(id)}`, { method: "DELETE" });
           state.transactions = state.transactions.filter((tx) => tx.id !== id);
@@ -501,8 +535,8 @@ function bindDashboardEvents() {
     });
   });
 
-  if (logoutButton) {
-    logoutButton.addEventListener("click", async () => {
+  if (headerLogoutButton) {
+    headerLogoutButton.addEventListener("click", async () => {
       try {
         await api("/api/logout", { method: "POST" });
       } finally {
@@ -539,6 +573,41 @@ function bindDashboardEvents() {
   if (searchInput) {
     searchInput.addEventListener("input", (event) => {
       state.search = event.target.value;
+      render();
+    });
+  }
+
+  if (dateFilterInput) {
+    dateFilterInput.addEventListener("input", (event) => {
+      state.filterDate = event.target.value;
+      render();
+    });
+  }
+
+  if (clearDateFilterButton) {
+    clearDateFilterButton.addEventListener("click", () => {
+      state.filterDate = "";
+      render();
+    });
+  }
+
+  if (tableFilterAll) {
+    tableFilterAll.addEventListener("click", () => {
+      state.filterType = "all";
+      render();
+    });
+  }
+
+  if (tableFilterWithdraw) {
+    tableFilterWithdraw.addEventListener("click", () => {
+      state.filterType = "ငွေထုတ်";
+      render();
+    });
+  }
+
+  if (tableFilterDeposit) {
+    tableFilterDeposit.addEventListener("click", () => {
+      state.filterType = "ငွေသွင်း";
       render();
     });
   }
@@ -644,7 +713,8 @@ function getVisibleTransactions() {
       const typeMatch = state.filterType === "all" || tx.type === state.filterType;
       const haystack = normalizeText(`${tx.customerName} ${tx.phoneNumber} ${tx.type} ${tx.createdByName}`);
       const searchMatch = !state.search || haystack.includes(normalizeText(state.search));
-      return typeMatch && searchMatch;
+      const dateMatch = !state.filterDate || getTransactionDate(tx.createdAt) === state.filterDate;
+      return typeMatch && searchMatch && dateMatch;
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -672,6 +742,35 @@ function summarizeTransactions(items) {
     profit: 0,
     byType: {}
   });
+}
+
+function getTransactionDate(createdAt) {
+  return String(createdAt || "").slice(0, 10);
+}
+
+function getDateProfitTransactions(items) {
+  if (state.filterDate) {
+    return items;
+  }
+
+  const todayPrefix = getTodayDatePrefix();
+  return items.filter((tx) => getTransactionDate(tx.createdAt) === todayPrefix);
+}
+
+function getTodayDatePrefix() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getDateProfitLabel() {
+  if (state.filterDate) {
+    return `Profit On ${state.filterDate}`;
+  }
+
+  return `Profit On ${getTodayDatePrefix()}`;
 }
 
 async function hydrateSession() {
