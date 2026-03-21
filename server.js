@@ -3,12 +3,15 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { Pool } = require("pg");
+const Tesseract = require("tesseract.js");
 
 loadEnvFile(path.join(__dirname, ".env"));
 
 const HOST = process.env.HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT || 4173);
 const APP_TIME_ZONE = process.env.APP_TIME_ZONE || "Asia/Yangon";
+const OCR_LANGUAGES = process.env.OCR_LANGUAGES || "eng";
+const MAX_JSON_BODY_BYTES = 6_000_000;
 const root = __dirname;
 const sessions = new Map();
 
@@ -37,7 +40,7 @@ async function start() {
   const server = http.createServer((req, res) => {
     handleRequest(req, res).catch((error) => {
       console.error(error);
-      sendJson(res, 500, { message: "Server error" });
+      sendJson(res, error.statusCode || 500, { message: error.message || "Server error" });
     });
   });
 
@@ -214,6 +217,62 @@ async function handleApiRequest(req, res, url) {
       sendJson(res, 201, { transaction });
       return;
     }
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/transactions/import-image") {
+    const user = await requireSessionUser(req, res);
+    if (!user) {
+      return;
+    }
+
+    const body = await readJsonBody(req);
+    const imageDataUrl = String(body.imageDataUrl || "").trim();
+
+    if (!isSupportedImageDataUrl(imageDataUrl)) {
+      sendJson(res, 400, { message: "Please upload a valid image." });
+      return;
+    }
+
+    const extracted = await extractTransactionFromImage(imageDataUrl);
+    const extractedTransactions = Array.isArray(extracted.transactions) ? extracted.transactions : [];
+    const validTransactions = extractedTransactions
+      .map((item, index) => buildImportedTransaction(item, user, index))
+      .filter(Boolean);
+
+    if (!validTransactions.length) {
+      sendJson(res, 422, {
+        message: "The image was read, but the transaction details were not clear enough to create automatically."
+      });
+      return;
+    }
+
+    for (const transaction of validTransactions) {
+      await pool.query(
+        `INSERT INTO transactions (
+          id, type, customer_name, amount, phone_number, profit,
+          created_by_id, created_by_name, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          transaction.id,
+          transaction.type,
+          transaction.customerName,
+          transaction.amount,
+          transaction.phoneNumber,
+          transaction.profit,
+          transaction.createdById,
+          transaction.createdByName,
+          transaction.createdAt,
+          transaction.updatedAt
+        ]
+      );
+    }
+
+    sendJson(res, 201, {
+      transaction: validTransactions[0],
+      transactions: validTransactions,
+      extracted
+    });
+    return;
   }
 
   const transactionMatch = url.pathname.match(/^\/api\/transactions\/([^/]+)$/);
@@ -492,7 +551,7 @@ function readJsonBody(req) {
 
     req.on("data", (chunk) => {
       raw += chunk;
-      if (raw.length > 1_000_000) {
+      if (raw.length > MAX_JSON_BODY_BYTES) {
         reject(new Error("Request body too large"));
         req.destroy();
       }
@@ -574,6 +633,234 @@ function calculateProfit(type, amount) {
   }
 
   return 0;
+}
+
+function isSupportedImageDataUrl(value) {
+  return /^data:image\/(png|jpe?g|webp);base64,/i.test(value);
+}
+
+function normalizeTransactionType(value) {
+  const normalized = normalizeText(value);
+
+  if (["ငွေထုတ်", "withdraw", "cash out", "withdrawal"].includes(normalized)) {
+    return "ငွေထုတ်";
+  }
+
+  if (["ငွေသွင်း", "deposit", "cash in"].includes(normalized)) {
+    return "ငွေသွင်း";
+  }
+
+  return "";
+}
+
+async function extractTransactionFromImage(imageDataUrl) {
+  const imageBuffer = decodeImageDataUrl(imageDataUrl);
+
+  try {
+    const result = await Tesseract.recognize(imageBuffer, OCR_LANGUAGES);
+    return parseTransactionsFromOcrText(result.data && result.data.text ? result.data.text : "");
+  } catch (error) {
+    const ocrError = new Error("Local OCR could not read this image clearly.");
+    ocrError.statusCode = 502;
+    throw ocrError;
+  }
+}
+
+function decodeImageDataUrl(imageDataUrl) {
+  const match = imageDataUrl.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,(.+)$/);
+  if (!match) {
+    const error = new Error("Please upload a valid image.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return Buffer.from(match[1], "base64");
+}
+
+function parseTransactionsFromOcrText(text) {
+  const rawText = String(text || "");
+  const compactText = rawText.replace(/\s+/g, " ").trim();
+  const lines = rawText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return {
+    transactions: extractTransactionsFromLines(lines, compactText),
+    notes: compactText
+  };
+}
+
+function extractTransactionsFromLines(lines, compactText) {
+  const transactions = [];
+
+  lines.forEach((line, index) => {
+    const signedAmountMatch = line.match(/[+-]\s*\d[\d,]*(?:\.\d{1,2})?/);
+    const unsignedAmountMatch = signedAmountMatch ? null : line.match(/\d[\d,]*(?:\.\d{1,2})?/);
+    const amountMatch = signedAmountMatch || unsignedAmountMatch;
+
+    if (!amountMatch) {
+      return;
+    }
+
+    const rawAmount = amountMatch[0].replace(/\s+/g, "");
+    const amount = toNumber(rawAmount);
+    if (amount <= 0) {
+      return;
+    }
+
+    const sign = rawAmount.startsWith("-") ? "-" : rawAmount.startsWith("+") ? "+" : "";
+    const surroundingText = [lines[index - 1], lines[index], lines[index + 1]].filter(Boolean).join(" ");
+    const detectedType = detectTransactionType(surroundingText || compactText);
+    const inferredType = detectedType || inferTransactionTypeFromSign(sign);
+    if (!inferredType) {
+      return;
+    }
+
+    const phoneNumber = detectPhoneNearLine(lines, index);
+    const customerName = detectCustomerNameAroundLine(lines, index, phoneNumber) || phoneNumber || "OCR Import";
+
+    transactions.push({
+      customerName,
+      amount,
+      phoneNumber,
+      type: inferredType,
+      confidence: sign ? 0.82 : 0.62
+    });
+  });
+
+  return dedupeExtractedTransactions(transactions);
+}
+
+function detectTransactionType(text) {
+  const normalized = normalizeText(text);
+
+  if (
+    normalized.includes("ငွေထုတ်") ||
+    normalized.includes("withdraw") ||
+    normalized.includes("cash out") ||
+    normalized.includes("sent")
+  ) {
+    return "ငွေထုတ်";
+  }
+
+  if (
+    normalized.includes("ငွေသွင်း") ||
+    normalized.includes("deposit") ||
+    normalized.includes("cash in") ||
+    normalized.includes("received")
+  ) {
+    return "ငွေသွင်း";
+  }
+
+  return "";
+}
+
+function inferTransactionTypeFromSign(sign) {
+  if (sign === "-") {
+    return "ငွေထုတ်";
+  }
+
+  if (sign === "+") {
+    return "ငွေသွင်း";
+  }
+
+  return "";
+}
+
+function detectPhoneNearLine(lines, startIndex) {
+  for (let index = Math.max(0, startIndex - 2); index <= Math.min(lines.length - 1, startIndex + 2); index += 1) {
+    const match = String(lines[index] || "").match(/(?:\+?95|09)\d{7,11}/);
+    if (match) {
+      return match[0];
+    }
+  }
+
+  return "";
+}
+
+function detectCustomerNameAroundLine(lines, amountIndex, phoneNumber) {
+  const ignoredPatterns = [
+    /^[+-]?\d[\d,]*(?:\.\d{1,2})?$/,
+    /mmk/i,
+    /kyat/i,
+    /date/i,
+    /time/i,
+    /balance/i,
+    /profit/i,
+    /transaction/i,
+    /receipt/i,
+    /wave/i,
+    /kbz/i,
+    /cash\s*(in|out)/i,
+    /deposit/i,
+    /withdraw/i,
+    /today/i,
+    /^\d{1,2}:\d{2}(?::\d{2})?$/,
+    /^\d{1,2}\/\d{1,2}\/\d{2,4}$/
+  ];
+
+  for (let offset = 1; offset <= 3; offset += 1) {
+    const candidates = [lines[amountIndex - offset], lines[amountIndex + offset]];
+
+    for (const line of candidates) {
+    if (!line || line === phoneNumber) {
+      continue;
+    }
+
+    if (ignoredPatterns.some((pattern) => pattern.test(line))) {
+      continue;
+    }
+
+    if (/\d{5,}/.test(line)) {
+      continue;
+    }
+
+    return line;
+    }
+  }
+
+  return "";
+}
+
+function dedupeExtractedTransactions(items) {
+  const seen = new Set();
+
+  return items.filter((item) => {
+    const key = `${item.type}|${item.amount}|${normalizeText(item.customerName)}|${item.phoneNumber}`;
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function buildImportedTransaction(item, user, index) {
+  const type = normalizeTransactionType(item.type);
+  const amount = toNumber(item.amount);
+  const customerName = String(item.customerName || item.phoneNumber || "OCR Import").trim();
+  const phoneNumber = String(item.phoneNumber || "").trim();
+
+  if (!type || amount <= 0) {
+    return null;
+  }
+
+  const createdAt = nowStamp();
+
+  return {
+    id: `tx-${Date.now()}-${index}`,
+    type,
+    customerName,
+    amount,
+    phoneNumber,
+    profit: calculateProfit(type, amount),
+    createdById: user.id,
+    createdByName: user.fullName,
+    createdAt,
+    updatedAt: createdAt
+  };
 }
 
 function hashPassword(password) {

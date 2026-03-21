@@ -10,6 +10,7 @@ This app is now a role-based counter system for KBZPay / WavePay style operation
 - Cashier cannot see profit
 - Normal sign up creates `cashier` accounts only
 - Floating plus button to create transactions
+- Image upload OCR import that can create a transaction automatically using free local OCR
 - Transaction types:
   - `ငွေထုတ်`
   - `ငွေသွင်း`
@@ -33,6 +34,7 @@ This app is now a role-based counter system for KBZPay / WavePay style operation
 - `styles.css`: dashboard styling
 - `server.js`: API server, session handling, and Neon/Postgres integration
 - `.env`: local server configuration, including `DATABASE_URL`
+- `OCR_LANGUAGES`: optional Tesseract language pack setting for local OCR, defaults to `eng`
 
 ## Run
 
@@ -46,6 +48,31 @@ npm start
 Then open `http://127.0.0.1:4173`
 
 If your local `.env` sets a different `PORT`, open that port instead.
+
+## Image OCR Import
+
+The app now uses free local OCR via `tesseract.js`, so no paid API key is required.
+
+Optional environment variable:
+
+```powershell
+OCR_LANGUAGES=eng
+```
+
+Then restart the server. Inside the transaction modal, use `Upload Image And Create` to send a receipt or screenshot to the OCR flow. The app will try to extract:
+
+- transaction type
+- customer name
+- amount
+- phone number
+
+and then create the transaction automatically.
+
+Notes:
+
+- Local OCR is free, but less accurate than paid vision APIs.
+- The first OCR request can be slower because Tesseract may need to initialize language data.
+- If your screenshots contain Burmese text, you can experiment with `OCR_LANGUAGES=eng+mya`.
 
 ## Deploy To Railway
 

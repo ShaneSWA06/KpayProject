@@ -675,7 +675,10 @@ body.theme-switching .theme-toggle-icon svg {
 
 .table-toolbar {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
   margin-top: 14px;
 }
 
@@ -694,6 +697,61 @@ body.theme-switching .theme-toggle-icon svg {
   border: 1px solid var(--border);
   border-radius: 16px;
   background: var(--surface);
+}
+
+.pagination-copy,
+.pagination-page {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.pagination-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pagination-arrow {
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.pagination-arrow svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pagination-arrow:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.pagination-arrow:disabled:hover {
+  background: #fff;
+}
+
+.pagination-input-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.pagination-page-input {
+  width: 72px;
+  text-align: center;
 }
 
 table {
@@ -885,6 +943,42 @@ tbody tr:hover {
   border: 1px dashed var(--border);
   border-radius: 14px;
   background: var(--surface-2);
+}
+
+.image-import-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+}
+
+.image-import-label {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.image-import-copy {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.visually-hidden-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .preview-card span,
@@ -1185,6 +1279,29 @@ code {
     border: none;
     background: transparent;
     margin-top: 10px;
+  }
+
+  .pagination-actions {
+    align-items: stretch;
+  }
+
+  .pagination-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .pagination-arrow {
+    flex: 0 0 48px;
+  }
+
+  .pagination-page {
+    flex: 0 0 auto;
+    text-align: center;
+  }
+
+  .pagination-input-group {
+    flex: 1 1 auto;
+    justify-content: center;
   }
 
   table {

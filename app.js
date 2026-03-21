@@ -1,5 +1,6 @@
 const THEME_KEY = "wallet-counter-pro-theme";
 const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:4173" : "";
+const TRANSACTIONS_PER_PAGE = 10;
 const APP_TIME_ZONE = "Asia/Yangon";
 
 const state = {
@@ -9,6 +10,7 @@ const state = {
   search: "",
   filterDate: "",
   filterType: "all",
+  currentPage: 1,
   modalOpen: false,
   editingId: "",
   authTab: "login",
@@ -87,6 +89,15 @@ function getThemeLabel() {
   return state.theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
 }
 
+function getPaginationArrowSvg(direction) {
+  const rotation = direction === "left" ? "180" : "0";
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M9 5l7 7-7 7" transform="rotate(${rotation} 12 12)"></path>
+    </svg>
+  `;
+}
+
 function renderAuth() {
   return `
     <main class="auth-shell">
@@ -159,6 +170,8 @@ function renderAuth() {
 
 function renderDashboard(user) {
   const visibleTransactions = getVisibleTransactions();
+  const pagination = getPaginationState(visibleTransactions.length);
+  const paginatedTransactions = visibleTransactions.slice(pagination.startIndex, pagination.endIndex);
   const summary = summarizeTransactions(visibleTransactions);
   const dateProfitSummary = summarizeTransactions(getDateProfitTransactions(visibleTransactions));
   const dateProfitLabel = getDateProfitLabel();
@@ -230,24 +243,24 @@ function renderDashboard(user) {
           </article>
           <article class="stat-card">
             <span>Total Amount</span>
-            <strong>${formatCurrency(summary.amount)}</strong>
+            <strong>${formatAmount(summary.amount)}</strong>
           </article>
           <article class="stat-card">
             <span>ငွေထုတ် Amount</span>
-            <strong>${formatCurrency(summary.byType["ငွေထုတ်"] ? summary.byType["ငွေထုတ်"].amount : 0)}</strong>
+            <strong>${formatAmount(summary.byType["ငွေထုတ်"] ? summary.byType["ငွေထုတ်"].amount : 0)}</strong>
           </article>
           <article class="stat-card">
             <span>ငွေသွင်း Amount</span>
-            <strong>${formatCurrency(summary.byType["ငွေသွင်း"] ? summary.byType["ငွေသွင်း"].amount : 0)}</strong>
+            <strong>${formatAmount(summary.byType["ငွေသွင်း"] ? summary.byType["ငွေသွင်း"].amount : 0)}</strong>
           </article>
           <article class="stat-card accent">
             <span>${escapeHtml(dateProfitLabel)}</span>
-            <strong>${isAdmin ? formatCurrency(dateProfitSummary.profit) : "Admin Only"}</strong>
+            <strong>${isAdmin ? formatProfit(dateProfitSummary.profit) : "Admin Only"}</strong>
           </article>
           ${isAdmin ? `
             <article class="stat-card accent">
               <span>Total Profit</span>
-              <strong>${formatCurrency(summary.profit)}</strong>
+              <strong>${formatProfit(summary.profit)}</strong>
             </article>
           ` : `
             <article class="stat-card restricted">
@@ -266,11 +279,11 @@ function renderDashboard(user) {
             <div class="type-summary-grid">
               <article class="type-card">
                 <span>ငွေထုတ် Profit</span>
-                <strong>${formatCurrency(summary.byType["ငွေထုတ်"] ? summary.byType["ငွေထုတ်"].profit : 0)}</strong>
+                <strong>${formatProfit(summary.byType["ငွေထုတ်"] ? summary.byType["ငွေထုတ်"].profit : 0)}</strong>
               </article>
               <article class="type-card">
                 <span>ငွေသွင်း Profit</span>
-                <strong>${formatCurrency(summary.byType["ငွေသွင်း"] ? summary.byType["ငွေသွင်း"].profit : 0)}</strong>
+                <strong>${formatProfit(summary.byType["ငွေသွင်း"] ? summary.byType["ငွေသွင်း"].profit : 0)}</strong>
               </article>
             </div>
           </section>
@@ -287,7 +300,21 @@ function renderDashboard(user) {
               <button id="tableFilterWithdraw" class="mini-button ${state.filterType === "ငွေထုတ်" ? "active-filter" : ""}" type="button">ငွေထုတ်</button>
               <button id="tableFilterDeposit" class="mini-button ${state.filterType === "ငွေသွင်း" ? "active-filter" : ""}" type="button">ငွေသွင်း</button>
             </div>
+            <div class="pagination-actions">
+              <button id="paginationPrevButton" class="secondary-button pagination-arrow" type="button" aria-label="Previous page" ${pagination.currentPage === 1 ? "disabled" : ""}>${getPaginationArrowSvg("left")}</button>
+              <label class="pagination-input-group">
+                <span>Page</span>
+                <input id="paginationPageInput" class="pagination-page-input" type="number" min="1" max="${pagination.totalPages}" value="${pagination.currentPage}">
+              </label>
+              <span class="pagination-page">of ${pagination.totalPages}</span>
+              <button id="paginationNextButton" class="secondary-button pagination-arrow" type="button" aria-label="Next page" ${pagination.currentPage === pagination.totalPages ? "disabled" : ""}>${getPaginationArrowSvg("right")}</button>
+            </div>
           </div>
+          <p class="pagination-copy">
+            ${pagination.totalItems
+              ? `Showing ${pagination.startItem}-${pagination.endItem} of ${pagination.totalItems} transactions`
+              : "No transactions to show"}
+          </p>
           <div class="table-wrap">
             <table>
               <thead>
@@ -303,7 +330,7 @@ function renderDashboard(user) {
                 </tr>
               </thead>
               <tbody>
-                ${renderTransactionRows(visibleTransactions, isAdmin)}
+                ${renderTransactionRows(paginatedTransactions, isAdmin)}
               </tbody>
             </table>
           </div>
@@ -344,6 +371,14 @@ function renderDashboard(user) {
               <span>Phone Number (Optional)</span>
               <input id="phoneNumber" type="text" placeholder="09xxxxxxxxx">
             </label>
+            <div class="image-import-card">
+              <div>
+                <span class="image-import-label">Image OCR Import</span>
+                <p class="image-import-copy">Upload a receipt or screenshot and let the app create the transaction automatically.</p>
+              </div>
+              <button id="imageImportButton" class="secondary-button full-width" type="button">Upload Image And Create</button>
+              <input id="imageImportInput" class="visually-hidden-input" type="file" accept="image/*">
+            </div>
             <div class="preview-card">
               <span>Profit Rule Preview</span>
               <strong id="profitPreview">${isAdmin ? "0.00 MMK" : "Admin Only"}</strong>
@@ -368,8 +403,8 @@ function renderTransactionRows(items, isAdmin) {
       <td data-label="Type"><span class="type-badge ${tx.type === "ငွေထုတ်" ? "withdraw" : "deposit"}">${escapeHtml(tx.type)}</span></td>
       <td data-label="Name">${escapeHtml(tx.customerName)}</td>
       <td data-label="Phone">${escapeHtml(tx.phoneNumber || "-")}</td>
-      <td data-label="Amount">${formatCurrency(tx.amount)}</td>
-      ${isAdmin ? `<td data-label="Profit" class="money-positive">${formatCurrency(tx.profit)}</td>` : ""}
+      <td data-label="Amount">${formatAmount(tx.amount)}</td>
+      ${isAdmin ? `<td data-label="Profit" class="money-positive">${formatProfit(tx.profit)}</td>` : ""}
       <td data-label="Created By">${escapeHtml(tx.createdByName)}</td>
       <td data-label="Action">
         <div class="row-actions">
@@ -484,16 +519,22 @@ function bindDashboardEvents() {
   const dateFilterInput = document.getElementById("dateFilterInput");
   const clearDateFilterButton = document.getElementById("clearDateFilterButton");
   const themeToggleDashboard = document.getElementById("themeToggleDashboard");
+  const imageImportButton = document.getElementById("imageImportButton");
+  const imageImportInput = document.getElementById("imageImportInput");
   const typeSelect = document.getElementById("transactionType");
   const typeToggleButtons = document.querySelectorAll("[data-transaction-type]");
   const amountInput = document.getElementById("amount");
   const tableFilterAll = document.getElementById("tableFilterAll");
   const tableFilterWithdraw = document.getElementById("tableFilterWithdraw");
   const tableFilterDeposit = document.getElementById("tableFilterDeposit");
+  const paginationPrevButton = document.getElementById("paginationPrevButton");
+  const paginationNextButton = document.getElementById("paginationNextButton");
+  const paginationPageInput = document.getElementById("paginationPageInput");
 
   document.querySelectorAll("[data-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       state.filterType = button.dataset.filter;
+      state.currentPage = 1;
       render();
     });
   });
@@ -505,7 +546,7 @@ function bindDashboardEvents() {
 
       if (action === "delete") {
         const tx = state.transactions.find((item) => item.id === id);
-        const label = tx ? `${tx.customerName} (${formatCurrency(tx.amount)})` : "this transaction";
+        const label = tx ? `${tx.customerName} (${formatAmount(tx.amount)})` : "this transaction";
         const confirmed = window.confirm(`Are you sure you want to delete ${label}?`);
         if (!confirmed) {
           return;
@@ -573,6 +614,7 @@ function bindDashboardEvents() {
   if (searchInput) {
     searchInput.addEventListener("input", (event) => {
       state.search = event.target.value;
+      state.currentPage = 1;
       render();
     });
   }
@@ -580,6 +622,7 @@ function bindDashboardEvents() {
   if (dateFilterInput) {
     dateFilterInput.addEventListener("input", (event) => {
       state.filterDate = event.target.value;
+      state.currentPage = 1;
       render();
     });
   }
@@ -587,6 +630,7 @@ function bindDashboardEvents() {
   if (clearDateFilterButton) {
     clearDateFilterButton.addEventListener("click", () => {
       state.filterDate = "";
+      state.currentPage = 1;
       render();
     });
   }
@@ -594,6 +638,7 @@ function bindDashboardEvents() {
   if (tableFilterAll) {
     tableFilterAll.addEventListener("click", () => {
       state.filterType = "all";
+      state.currentPage = 1;
       render();
     });
   }
@@ -601,6 +646,7 @@ function bindDashboardEvents() {
   if (tableFilterWithdraw) {
     tableFilterWithdraw.addEventListener("click", () => {
       state.filterType = "ငွေထုတ်";
+      state.currentPage = 1;
       render();
     });
   }
@@ -608,7 +654,45 @@ function bindDashboardEvents() {
   if (tableFilterDeposit) {
     tableFilterDeposit.addEventListener("click", () => {
       state.filterType = "ငွေသွင်း";
+      state.currentPage = 1;
       render();
+    });
+  }
+
+  if (paginationPrevButton) {
+    paginationPrevButton.addEventListener("click", () => {
+      state.currentPage = Math.max(1, state.currentPage - 1);
+      render();
+    });
+  }
+
+  if (paginationNextButton) {
+    paginationNextButton.addEventListener("click", () => {
+      const pagination = getPaginationState(getVisibleTransactions().length);
+      state.currentPage = Math.min(pagination.totalPages, state.currentPage + 1);
+      render();
+    });
+  }
+
+  if (paginationPageInput) {
+    const applyPageInput = () => {
+      const pagination = getPaginationState(getVisibleTransactions().length);
+      const rawValue = Number(paginationPageInput.value);
+      if (!Number.isFinite(rawValue)) {
+        paginationPageInput.value = String(state.currentPage);
+        return;
+      }
+
+      state.currentPage = Math.min(pagination.totalPages, Math.max(1, Math.trunc(rawValue)));
+      render();
+    };
+
+    paginationPageInput.addEventListener("change", applyPageInput);
+    paginationPageInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyPageInput();
+      }
     });
   }
 
@@ -663,12 +747,70 @@ function bindDashboardEvents() {
           ));
         } else {
           state.transactions.unshift(payload.transaction);
+          state.currentPage = 1;
         }
 
         closeModal();
         render();
       } catch (error) {
         message.textContent = error.message;
+      }
+    });
+  }
+
+  if (imageImportButton && imageImportInput) {
+    imageImportButton.addEventListener("click", () => {
+      imageImportInput.click();
+    });
+
+    imageImportInput.addEventListener("change", async (event) => {
+      const [file] = Array.from(event.target.files || []);
+      event.target.value = "";
+
+      if (!file) {
+        return;
+      }
+
+      const message = document.getElementById("transactionMessage");
+      const originalLabel = imageImportButton.textContent;
+
+      imageImportButton.disabled = true;
+      imageImportButton.textContent = "Reading image...";
+      if (message) {
+        message.textContent = "Scanning image and creating transaction...";
+      }
+
+      try {
+        const imageDataUrl = await prepareImageForUpload(file);
+        imageImportButton.textContent = "Creating transaction...";
+        const payload = await api("/api/transactions/import-image", {
+          method: "POST",
+          body: JSON.stringify({ imageDataUrl })
+        });
+
+        const importedTransactions = Array.isArray(payload.transactions)
+          ? payload.transactions
+          : (payload.transaction ? [payload.transaction] : []);
+
+        if (!importedTransactions.length) {
+          throw new Error("No transactions were created from that image.");
+        }
+
+        state.transactions = [...importedTransactions, ...state.transactions];
+        closeModal();
+        render();
+        window.alert(
+          importedTransactions.length === 1
+            ? `Transaction created from image for ${importedTransactions[0].customerName}.`
+            : `${importedTransactions.length} transactions were created from the uploaded image.`
+        );
+      } catch (error) {
+        if (message) {
+          message.textContent = error.message;
+        }
+      } finally {
+        imageImportButton.disabled = false;
+        imageImportButton.textContent = originalLabel;
       }
     });
   }
@@ -712,6 +854,10 @@ function openCreateModal() {
   if (message) {
     message.textContent = "";
   }
+  const imageImportInput = document.getElementById("imageImportInput");
+  if (imageImportInput) {
+    imageImportInput.value = "";
+  }
 
   modalBackdrop.classList.add("visible");
 
@@ -746,7 +892,50 @@ function updateProfitPreview() {
     return;
   }
 
-  preview.textContent = formatCurrency(calculateProfit(typeInput.value, amountInput.value));
+  preview.textContent = formatProfit(calculateProfit(typeInput.value, amountInput.value));
+}
+
+async function prepareImageForUpload(file) {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Please upload an image file.");
+  }
+
+  const image = await loadImageElement(file);
+  const maxDimension = 1600;
+  const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height));
+  const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+  const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("Image processing is not supported in this browser.");
+  }
+
+  context.drawImage(image, 0, 0, width, height);
+  return canvas.toDataURL("image/jpeg", 0.82);
+}
+
+function loadImageElement(file) {
+  return new Promise((resolve, reject) => {
+    const imageUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(imageUrl);
+      resolve(image);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(imageUrl);
+      reject(new Error("Could not read that image."));
+    };
+
+    image.src = imageUrl;
+  });
 }
 
 function setTransactionType(type) {
@@ -781,6 +970,25 @@ function getVisibleTransactions() {
       return typeMatch && searchMatch && dateMatch;
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+function getPaginationState(totalItems) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / TRANSACTIONS_PER_PAGE));
+  const currentPage = Math.min(state.currentPage, totalPages);
+  const startIndex = (currentPage - 1) * TRANSACTIONS_PER_PAGE;
+  const endIndex = startIndex + TRANSACTIONS_PER_PAGE;
+
+  state.currentPage = currentPage;
+
+  return {
+    totalItems,
+    totalPages,
+    currentPage,
+    startIndex,
+    endIndex,
+    startItem: totalItems ? startIndex + 1 : 0,
+    endItem: totalItems ? Math.min(endIndex, totalItems) : 0
+  };
 }
 
 function summarizeTransactions(items) {
@@ -899,7 +1107,14 @@ function toNumber(value) {
   return Number.isFinite(numeric) ? numeric : 0;
 }
 
-function formatCurrency(value) {
+function formatAmount(value) {
+  return `${new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(value)} MMK`;
+}
+
+function formatProfit(value) {
   return `${new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
