@@ -187,7 +187,7 @@ async function handleApiRequest(req, res, url) {
       const createdAt = nowStamp();
       const duplicate = allowDuplicate
         ? null
-        : await findRecentDuplicateTransaction({ phoneNumber, amount, referenceStamp: createdAt });
+        : await findRecentDuplicateTransaction({ type, customerName, amount, referenceStamp: createdAt });
 
       if (duplicate) {
         sendJson(res, 409, {
@@ -524,9 +524,9 @@ function mapTransactionRow(row) {
   };
 }
 
-async function findRecentDuplicateTransaction({ phoneNumber, amount, referenceStamp }) {
-  const normalizedPhone = String(phoneNumber || "").trim();
-  if (!normalizedPhone || amount <= 0) {
+async function findRecentDuplicateTransaction({ type, customerName, amount, referenceStamp }) {
+  const normalizedCustomerName = normalizeText(customerName);
+  if (!normalizedCustomerName || amount <= 0 || !["ငွေထုတ်", "ငွေသွင်း"].includes(type)) {
     return null;
   }
 
@@ -543,11 +543,12 @@ async function findRecentDuplicateTransaction({ phoneNumber, amount, referenceSt
       created_at,
       updated_at
      FROM transactions
-     WHERE phone_number = $1
-       AND amount = $2
+     WHERE type = $1
+       AND lower(customer_name) = $2
+       AND amount = $3
      ORDER BY created_at DESC
      LIMIT 5`,
-    [normalizedPhone, amount]
+    [type, normalizedCustomerName, amount]
   );
 
   const referenceTime = parseStampToUtcMs(referenceStamp);

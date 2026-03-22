@@ -9,6 +9,9 @@ const state = {
   theme: loadTheme(),
   search: "",
   filterDate: "",
+  calendarOpen: false,
+  calendarMonth: "",
+  historyScope: "today",
   filterType: "all",
   currentPage: 1,
   modalOpen: false,
@@ -235,22 +238,24 @@ function renderDashboard(user) {
           </div>
           <div class="topbar-tools">
             <input id="searchInput" class="search-input" type="search" placeholder="Search by customer, phone, or user" value="${escapeHtml(state.search)}">
-            <button
-              id="dateFilterToggleButton"
-              class="icon-button date-filter-toggle ${state.filterDate ? "active" : ""}"
-              type="button"
-              aria-label="${state.filterDate ? `Change date filter from ${escapeHtml(state.filterDate)}` : "Open date filter"}"
-              title="${state.filterDate ? `Date filter: ${escapeHtml(state.filterDate)}` : "Filter by date"}"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="3" y="5" width="18" height="16" rx="2"></rect>
-                <path d="M16 3v4"></path>
-                <path d="M8 3v4"></path>
-                <path d="M3 10h18"></path>
-              </svg>
-            </button>
-            <input id="dateFilterInput" class="date-filter-input" type="date" value="${escapeHtml(state.filterDate)}">
-            <button id="clearDateFilterButton" class="secondary-button ${state.filterDate ? "" : "hidden"}" type="button">Clear Date</button>
+            <div class="date-filter-shell">
+              <button
+                id="dateFilterToggleButton"
+                class="icon-button date-filter-toggle ${state.filterDate ? "active" : ""}"
+                type="button"
+                aria-label="${state.filterDate ? `Change date filter from ${escapeHtml(state.filterDate)}` : "Open date filter"}"
+                title="${state.filterDate ? `Date filter: ${escapeHtml(state.filterDate)}` : "Filter by date"}"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="3" y="5" width="18" height="16" rx="2"></rect>
+                  <path d="M16 3v4"></path>
+                  <path d="M8 3v4"></path>
+                  <path d="M3 10h18"></path>
+                </svg>
+              </button>
+              <input id="dateFilterInput" class="date-filter-input" type="hidden" value="${escapeHtml(state.filterDate)}">
+              ${renderDateFilterPopover()}
+            </div>
           </div>
         </header>
 
@@ -342,10 +347,16 @@ function renderDashboard(user) {
             <p>The plus button creates new transactions with name, amount, and optional phone number.</p>
           </div>
           <div class="table-toolbar">
-            <div class="table-filter-group">
-              <button id="tableFilterAll" class="mini-button ${state.filterType === "all" ? "active-filter" : ""}" type="button">All</button>
-              <button id="tableFilterWithdraw" class="mini-button ${state.filterType === "ငွေထုတ်" ? "active-filter" : ""}" type="button">ငွေထုတ်</button>
-              <button id="tableFilterDeposit" class="mini-button ${state.filterType === "ငွေသွင်း" ? "active-filter" : ""}" type="button">ငွေသွင်း</button>
+            <div class="table-toolbar-filters">
+              <div class="table-filter-group">
+                <button id="tableScopeToday" class="mini-button ${state.historyScope === "today" && !state.filterDate ? "active-filter" : ""}" type="button">Today</button>
+                <button id="tableScopeAllDates" class="mini-button ${state.historyScope === "all" && !state.filterDate ? "active-filter" : ""}" type="button">All Dates</button>
+              </div>
+              <div class="table-filter-group">
+                <button id="tableFilterAll" class="mini-button ${state.filterType === "all" ? "active-filter" : ""}" type="button">All</button>
+                <button id="tableFilterWithdraw" class="mini-button ${state.filterType === "ငွေထုတ်" ? "active-filter" : ""}" type="button">ငွေထုတ်</button>
+                <button id="tableFilterDeposit" class="mini-button ${state.filterType === "ငွေသွင်း" ? "active-filter" : ""}" type="button">ငွေသွင်း</button>
+              </div>
             </div>
             <div class="pagination-actions">
               <button id="paginationPrevButton" class="secondary-button pagination-arrow" type="button" aria-label="Previous page" ${pagination.currentPage === 1 ? "disabled" : ""}>${getPaginationArrowSvg("left")}</button>
@@ -496,6 +507,44 @@ function renderDuplicateConfirmModal() {
   `;
 }
 
+function renderDateFilterPopover() {
+  const viewDate = getCalendarViewDate();
+  const viewYear = viewDate.getUTCFullYear();
+  const viewMonth = viewDate.getUTCMonth();
+  const label = viewDate.toLocaleString("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC"
+  });
+
+  return `
+    <div class="date-popover ${state.calendarOpen ? "visible" : ""}" id="dateFilterPopover">
+      <div class="date-popover-header">
+        <button id="calendarPrevButton" class="icon-button date-nav-button" type="button" aria-label="Previous month">
+          ${getPaginationArrowSvg("left")}
+        </button>
+        <div class="date-popover-title">
+          <span>Date Filter</span>
+          <strong>${escapeHtml(label)}</strong>
+        </div>
+        <button id="calendarNextButton" class="icon-button date-nav-button" type="button" aria-label="Next month">
+          ${getPaginationArrowSvg("right")}
+        </button>
+      </div>
+      <div class="date-weekdays">
+        <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+      </div>
+      <div class="date-grid">
+        ${buildCalendarDayButtons(viewYear, viewMonth)}
+      </div>
+      <div class="date-popover-actions">
+        <button id="calendarClearButton" class="secondary-button ghost-button" type="button">Clear</button>
+        <button id="calendarTodayButton" class="secondary-button" type="button">Today</button>
+      </div>
+    </div>
+  `;
+}
+
 function getActionIconSvg(type) {
   if (type === "edit") {
     return `
@@ -634,7 +683,11 @@ function bindDashboardEvents() {
   const searchInput = document.getElementById("searchInput");
   const dateFilterToggleButton = document.getElementById("dateFilterToggleButton");
   const dateFilterInput = document.getElementById("dateFilterInput");
-  const clearDateFilterButton = document.getElementById("clearDateFilterButton");
+  const dateFilterPopover = document.getElementById("dateFilterPopover");
+  const calendarPrevButton = document.getElementById("calendarPrevButton");
+  const calendarNextButton = document.getElementById("calendarNextButton");
+  const calendarTodayButton = document.getElementById("calendarTodayButton");
+  const calendarClearButton = document.getElementById("calendarClearButton");
   const themeToggleDashboard = document.getElementById("themeToggleDashboard");
   const imageImportButton = document.getElementById("imageImportButton");
   const imageImportInput = document.getElementById("imageImportInput");
@@ -644,6 +697,8 @@ function bindDashboardEvents() {
   const tableFilterAll = document.getElementById("tableFilterAll");
   const tableFilterWithdraw = document.getElementById("tableFilterWithdraw");
   const tableFilterDeposit = document.getElementById("tableFilterDeposit");
+  const tableScopeToday = document.getElementById("tableScopeToday");
+  const tableScopeAllDates = document.getElementById("tableScopeAllDates");
   const paginationPrevButton = document.getElementById("paginationPrevButton");
   const paginationNextButton = document.getElementById("paginationNextButton");
   const paginationPageInput = document.getElementById("paginationPageInput");
@@ -764,27 +819,63 @@ function bindDashboardEvents() {
     });
   }
 
-  if (dateFilterInput) {
-    dateFilterInput.addEventListener("input", (event) => {
-      state.filterDate = event.target.value;
+  if (dateFilterToggleButton) {
+    dateFilterToggleButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleCalendarPopover();
+    });
+  }
+
+  if (dateFilterPopover) {
+    dateFilterPopover.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+  }
+
+  if (calendarPrevButton) {
+    calendarPrevButton.addEventListener("click", () => {
+      state.calendarMonth = shiftCalendarMonth(-1);
+      render();
+    });
+  }
+
+  if (calendarNextButton) {
+    calendarNextButton.addEventListener("click", () => {
+      state.calendarMonth = shiftCalendarMonth(1);
+      render();
+    });
+  }
+
+  if (calendarTodayButton) {
+    calendarTodayButton.addEventListener("click", () => {
+      applyDateFilter(getTodayDatePrefix());
+    });
+  }
+
+  if (calendarClearButton) {
+    calendarClearButton.addEventListener("click", () => {
+      clearDateFilter();
+    });
+  }
+
+  document.querySelectorAll("[data-calendar-date]").forEach((button) => {
+    button.addEventListener("click", () => {
+      applyDateFilter(button.dataset.calendarDate);
+    });
+  });
+
+  if (tableScopeToday) {
+    tableScopeToday.addEventListener("click", () => {
+      state.historyScope = "today";
+      state.filterDate = "";
       state.currentPage = 1;
       render();
     });
   }
 
-  if (dateFilterToggleButton && dateFilterInput) {
-    dateFilterToggleButton.addEventListener("click", () => {
-      if (typeof dateFilterInput.showPicker === "function") {
-        dateFilterInput.showPicker();
-        return;
-      }
-
-      dateFilterInput.click();
-    });
-  }
-
-  if (clearDateFilterButton) {
-    clearDateFilterButton.addEventListener("click", () => {
+  if (tableScopeAllDates) {
+    tableScopeAllDates.addEventListener("click", () => {
+      state.historyScope = "all";
       state.filterDate = "";
       state.currentPage = 1;
       render();
@@ -942,6 +1033,22 @@ function closeModal() {
   state.modalOpen = false;
   state.editingId = "";
   state.pendingDuplicate = null;
+  render();
+}
+
+function toggleCalendarPopover() {
+  state.calendarOpen = !state.calendarOpen;
+  if (state.calendarOpen) {
+    syncCalendarMonth();
+  }
+  render();
+}
+
+function closeCalendarPopover() {
+  if (!state.calendarOpen) {
+    return;
+  }
+  state.calendarOpen = false;
   render();
 }
 
@@ -1114,6 +1221,7 @@ function getDeleteConfirmModalContent(tx) {
 
 function getDuplicateConfirmModalContent(pendingDuplicate) {
   const duplicate = pendingDuplicate.duplicate;
+  const duplicateBasis = "same name and amount";
   return `
     <section class="modal-card confirm-card">
       <div class="modal-header">
@@ -1124,7 +1232,7 @@ function getDuplicateConfirmModalContent(pendingDuplicate) {
         <button id="closeDuplicateConfirmButton" class="icon-button" type="button" aria-label="Close duplicate warning">x</button>
       </div>
       <p class="confirm-copy">
-        A transaction with the same phone number and amount was already saved at <strong>${escapeHtml(duplicate.createdAt)}</strong>.
+        A transaction with the ${duplicateBasis} was already saved at <strong>${escapeHtml(duplicate.createdAt)}</strong>.
       </p>
       <div class="details-grid confirm-match-card">
         <div class="details-item"><span>Name</span><strong>${escapeHtml(duplicate.customerName)}</strong></div>
@@ -1200,6 +1308,7 @@ function openCreateModal() {
     message.textContent = "";
   }
   closeDuplicateConfirm();
+  state.calendarOpen = false;
   const imageImportInput = document.getElementById("imageImportInput");
   if (imageImportInput) {
     imageImportInput.value = "";
@@ -1246,6 +1355,7 @@ function openEditModal(tx) {
   }
 
   closeDuplicateConfirm();
+  state.calendarOpen = false;
 
   modalBackdrop.classList.add("visible");
   if (transactionId) {
@@ -1417,15 +1527,90 @@ function getCurrentUser() {
 }
 
 function getVisibleTransactions() {
+  const todayPrefix = getTodayDatePrefix();
   return state.transactions
     .filter((tx) => {
       const typeMatch = state.filterType === "all" || tx.type === state.filterType;
       const haystack = normalizeText(`${tx.customerName} ${tx.phoneNumber} ${tx.type} ${tx.createdByName}`);
       const searchMatch = !state.search || haystack.includes(normalizeText(state.search));
-      const dateMatch = !state.filterDate || getTransactionDate(tx.createdAt) === state.filterDate;
+      const txDate = getTransactionDate(tx.createdAt);
+      const dateMatch = state.filterDate
+        ? txDate === state.filterDate
+        : (state.historyScope === "all" || txDate === todayPrefix);
       return typeMatch && searchMatch && dateMatch;
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+function syncCalendarMonth() {
+  state.calendarMonth = (state.filterDate || getTodayDatePrefix()).slice(0, 7);
+}
+
+function getCalendarViewDate() {
+  const monthValue = state.calendarMonth || (state.filterDate || getTodayDatePrefix()).slice(0, 7);
+  const match = monthValue.match(/^(\d{4})-(\d{2})$/);
+
+  if (!match) {
+    return new Date(`${getTodayDatePrefix()}T00:00:00Z`);
+  }
+
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1));
+}
+
+function shiftCalendarMonth(offset) {
+  const viewDate = getCalendarViewDate();
+  const shifted = new Date(Date.UTC(viewDate.getUTCFullYear(), viewDate.getUTCMonth() + offset, 1));
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function buildCalendarDayButtons(year, month) {
+  const firstDay = new Date(Date.UTC(year, month, 1));
+  const startWeekday = firstDay.getUTCDay();
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const today = getTodayDatePrefix();
+  const selectedDate = state.filterDate;
+  const cells = [];
+
+  for (let index = 0; index < startWeekday; index += 1) {
+    cells.push(`<span class="date-day spacer" aria-hidden="true"></span>`);
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const isoDate = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const classes = ["date-day"];
+
+    if (selectedDate === isoDate) {
+      classes.push("selected");
+    }
+
+    if (today === isoDate) {
+      classes.push("today");
+    }
+
+    cells.push(`
+      <button class="${classes.join(" ")}" data-calendar-date="${isoDate}" type="button">
+        ${day}
+      </button>
+    `);
+  }
+
+  return cells.join("");
+}
+
+function applyDateFilter(value) {
+  state.filterDate = value;
+  state.calendarMonth = value.slice(0, 7);
+  state.calendarOpen = false;
+  state.currentPage = 1;
+  render();
+}
+
+function clearDateFilter() {
+  state.filterDate = "";
+  state.calendarMonth = getTodayDatePrefix().slice(0, 7);
+  state.calendarOpen = false;
+  state.currentPage = 1;
+  render();
 }
 
 function getPaginationState(totalItems) {
@@ -1564,9 +1749,11 @@ async function hydrateSession() {
     const payload = await api("/api/session");
     state.sessionUser = payload.user;
     state.transactions = payload.transactions || [];
+    state.calendarMonth = getTodayDatePrefix().slice(0, 7);
   } catch {
     state.sessionUser = null;
     state.transactions = [];
+    state.calendarMonth = getTodayDatePrefix().slice(0, 7);
   } finally {
     state.loading = false;
     render();
@@ -1653,3 +1840,15 @@ function calculateProfit(type, amount) {
 
 render();
 hydrateSession();
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.calendarOpen) {
+    closeCalendarPopover();
+  }
+});
+
+document.addEventListener("click", () => {
+  if (state.calendarOpen) {
+    closeCalendarPopover();
+  }
+});
