@@ -2,6 +2,9 @@ const THEME_KEY = "wallet-counter-pro-theme";
 const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:4173" : "";
 const TRANSACTIONS_PER_PAGE = 10;
 const APP_TIME_ZONE = "Asia/Yangon";
+const MAX_NAME_LENGTH = 40;
+const MAX_AMOUNT_DIGITS = 12;
+const MAX_PHONE_DIGITS = 11;
 
 const state = {
   transactions: [],
@@ -430,23 +433,27 @@ function renderDashboard(user) {
             </label>
             <label>
               <span>Name</span>
-              <input id="customerName" type="text" required placeholder="Customer name">
+              <input id="customerName" type="text" maxlength="40" required placeholder="Customer name">
             </label>
             <label>
               <span>Money (MMK)</span>
-              <input id="amount" type="text" inputmode="decimal" autocomplete="off" required placeholder="Enter amount">
+              <input id="amount" type="text" inputmode="decimal" autocomplete="off" maxlength="15" required placeholder="Enter amount">
             </label>
             <label>
               <span>Phone Number (Optional)</span>
-              <input id="phoneNumber" type="text" inputmode="numeric" autocomplete="tel" placeholder="09xxxxxxxxx">
+              <input id="phoneNumber" type="text" inputmode="numeric" autocomplete="tel" maxlength="11" placeholder="09xxxxxxxxx">
             </label>
             <div class="image-import-card">
               <div>
                 <span class="image-import-label">Image OCR Import</span>
-                <p class="image-import-copy">Upload a receipt or screenshot and let the app create the transaction automatically.</p>
+                <p class="image-import-copy">Upload a receipt or screenshot, or take a photo, and let the app create the transaction automatically.</p>
               </div>
-              <button id="imageImportButton" class="secondary-button full-width" type="button">Upload Image And Create</button>
+              <div class="image-import-actions">
+                <button id="imageImportButton" class="secondary-button full-width" type="button">Upload Image</button>
+                <button id="cameraImportButton" class="secondary-button full-width" type="button">Take Photo</button>
+              </div>
               <input id="imageImportInput" class="visually-hidden-input" type="file" accept="image/*">
+              <input id="cameraImportInput" class="visually-hidden-input" type="file" accept="image/*" capture="environment">
             </div>
             <div class="preview-card">
               <span>Profit Rule Preview</span>
@@ -700,6 +707,8 @@ function bindDashboardEvents() {
   const themeToggleDashboard = document.getElementById("themeToggleDashboard");
   const imageImportButton = document.getElementById("imageImportButton");
   const imageImportInput = document.getElementById("imageImportInput");
+  const cameraImportButton = document.getElementById("cameraImportButton");
+  const cameraImportInput = document.getElementById("cameraImportInput");
   const typeSelect = document.getElementById("transactionType");
   const typeToggleButtons = document.querySelectorAll("[data-transaction-type]");
   const amountInput = document.getElementById("amount");
@@ -974,6 +983,13 @@ function bindDashboardEvents() {
     });
   }
 
+  const phoneNumberInput = document.getElementById("phoneNumber");
+  if (phoneNumberInput) {
+    phoneNumberInput.addEventListener("input", () => {
+      phoneNumberInput.value = phoneNumberInput.value.replace(/\D/g, "").slice(0, MAX_PHONE_DIGITS);
+    });
+  }
+
   if (transactionForm) {
     transactionForm.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -985,53 +1001,63 @@ function bindDashboardEvents() {
     imageImportButton.addEventListener("click", () => {
       imageImportInput.click();
     });
+  }
 
-    imageImportInput.addEventListener("change", async (event) => {
+  if (cameraImportButton && cameraImportInput) {
+    cameraImportButton.addEventListener("click", () => {
+      cameraImportInput.click();
+    });
+  }
+
+  const handleImageImport = async (event, sourceButton) => {
       const [file] = Array.from(event.target.files || []);
       event.target.value = "";
 
-      if (!file) {
+      if (!file || !sourceButton) {
         return;
       }
 
       const message = document.getElementById("transactionMessage");
-      const originalLabel = imageImportButton.textContent;
+      const originalLabel = sourceButton.textContent;
 
-      imageImportButton.disabled = true;
-      imageImportButton.textContent = "Reading image...";
-      setTransactionMessage(message, "Scanning image and creating transaction...");
+      imageImportButton && (imageImportButton.disabled = true);
+      cameraImportButton && (cameraImportButton.disabled = true);
+      sourceButton.textContent = sourceButton === cameraImportButton ? "Opening camera..." : "Reading image...";
+      setTransactionMessage(message, "Scanning image and creating the transaction...");
 
       try {
-        const imageDataUrl = await prepareImageForUpload(file);
-        imageImportButton.textContent = "Creating transaction...";
+        const imagePayload = await prepareImageForUpload(file);
+        imagePayload.fallbackType = document.getElementById("transactionType")?.value || "ငွေထုတ်";
+        sourceButton.textContent = "Creating transaction...";
         const payload = await api("/api/transactions/import-image", {
           method: "POST",
-          body: JSON.stringify({ imageDataUrl })
+          body: JSON.stringify(imagePayload)
         });
 
-        const importedTransactions = Array.isArray(payload.transactions)
-          ? payload.transactions
-          : (payload.transaction ? [payload.transaction] : []);
+        const importedDrafts = Array.isArray(payload.drafts)
+          ? payload.drafts
+          : (payload.draft ? [payload.draft] : []);
 
-        if (!importedTransactions.length) {
-          throw new Error("No transactions were created from that image.");
+        if (!importedDrafts.length) {
+          throw new Error("No transaction details were found in that image.");
         }
 
-        state.transactions = [...importedTransactions, ...state.transactions];
-        closeModal();
-        render();
-        window.alert(
-          importedTransactions.length === 1
-            ? `Transaction created from image for ${importedTransactions[0].customerName}.`
-            : `${importedTransactions.length} transactions were created from the uploaded image.`
-        );
+        await submitTransactionForm({ draft: importedDrafts[0] });
       } catch (error) {
         setTransactionMessage(message, error.message);
       } finally {
-        imageImportButton.disabled = false;
-        imageImportButton.textContent = originalLabel;
+        imageImportButton && (imageImportButton.disabled = false);
+        cameraImportButton && (cameraImportButton.disabled = false);
+        sourceButton.textContent = originalLabel;
       }
-    });
+    };
+
+  if (imageImportInput) {
+    imageImportInput.addEventListener("change", (event) => handleImageImport(event, imageImportButton));
+  }
+
+  if (cameraImportInput) {
+    cameraImportInput.addEventListener("change", (event) => handleImageImport(event, cameraImportButton));
   }
 
   updateProfitPreview();
@@ -1316,8 +1342,12 @@ function openCreateModal() {
   closeDuplicateConfirm();
   state.calendarOpen = false;
   const imageImportInput = document.getElementById("imageImportInput");
+  const cameraImportInput = document.getElementById("cameraImportInput");
   if (imageImportInput) {
     imageImportInput.value = "";
+  }
+  if (cameraImportInput) {
+    cameraImportInput.value = "";
   }
 
   modalBackdrop.classList.add("visible");
@@ -1434,6 +1464,25 @@ function clearTransactionMessage(message) {
   message.classList.add("hidden");
 }
 
+function applyImportedDraft(draft) {
+  const typeInput = document.getElementById("transactionType");
+  const customerNameInput = document.getElementById("customerName");
+  const amountInput = document.getElementById("amount");
+  const phoneNumberInput = document.getElementById("phoneNumber");
+
+  if (!draft || !typeInput || !customerNameInput || !amountInput || !phoneNumberInput) {
+    return;
+  }
+
+  const nextType = normalizeTransactionType(draft.type) || "ငွေထုတ်";
+  typeInput.value = nextType;
+  updateTransactionTypeButtons(nextType);
+  customerNameInput.value = String(draft.customerName || "").trim();
+  amountInput.value = formatEditableAmount(String(draft.amount || ""));
+  phoneNumberInput.value = String(draft.phoneNumber || "").replace(/\D/g, "").slice(0, MAX_PHONE_DIGITS);
+  updateProfitPreview();
+}
+
 async function submitTransactionForm({ allowDuplicate = false, draft = null } = {}) {
   const type = draft?.type ?? document.getElementById("transactionType")?.value;
   const customerName = draft?.customerName ?? document.getElementById("customerName")?.value.trim();
@@ -1446,8 +1495,18 @@ async function submitTransactionForm({ allowDuplicate = false, draft = null } = 
     return;
   }
 
+  if (customerName.length > MAX_NAME_LENGTH) {
+    setTransactionMessage(message, `Name is too long. Please keep it within ${MAX_NAME_LENGTH} characters.`);
+    return;
+  }
+
   if (amount <= 0) {
     setTransactionMessage(message, "Amount must be greater than 0.");
+    return;
+  }
+
+  if (String(Math.trunc(amount)).length > MAX_AMOUNT_DIGITS) {
+    setTransactionMessage(message, `Amount is too large. Please keep it within ${MAX_AMOUNT_DIGITS} digits.`);
     return;
   }
 
@@ -1510,7 +1569,42 @@ async function prepareImageForUpload(file) {
   }
 
   context.drawImage(image, 0, 0, width, height);
-  return canvas.toDataURL("image/jpeg", 0.82);
+  return {
+    fullImageDataUrl: canvas.toDataURL("image/jpeg", 0.82),
+    amountImageDataUrl: cropCanvasToDataUrl(canvas, 0.16, 0.27, 0.68, 0.22, 1.8),
+    detailsImageDataUrl: cropCanvasToDataUrl(canvas, 0.08, 0.48, 0.84, 0.32, 1.4),
+    nameImageDataUrl: cropCanvasToDataUrl(canvas, 0.52, 0.59, 0.36, 0.17, 2.5),
+    phoneImageDataUrl: cropCanvasToDataUrl(canvas, 0.54, 0.47, 0.34, 0.14, 2.2)
+  };
+}
+
+function cropCanvasToDataUrl(sourceCanvas, xRatio, yRatio, widthRatio, heightRatio, scaleFactor = 1) {
+  const cropX = Math.max(0, Math.round(sourceCanvas.width * xRatio));
+  const cropY = Math.max(0, Math.round(sourceCanvas.height * yRatio));
+  const cropWidth = Math.max(1, Math.round(sourceCanvas.width * widthRatio));
+  const cropHeight = Math.max(1, Math.round(sourceCanvas.height * heightRatio));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(cropWidth * scaleFactor));
+  canvas.height = Math.max(1, Math.round(cropHeight * scaleFactor));
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return sourceCanvas.toDataURL("image/jpeg", 0.82);
+  }
+
+  context.drawImage(
+    sourceCanvas,
+    cropX,
+    cropY,
+    cropWidth,
+    cropHeight,
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  return canvas.toDataURL("image/jpeg", 0.88);
 }
 
 function loadImageElement(file) {
@@ -1848,7 +1942,7 @@ function formatEditableAmount(value) {
 
   const hasTrailingDot = sanitized.endsWith(".");
   const [integerPartRaw, decimalPartRaw = ""] = sanitized.split(".");
-  const integerDigits = integerPartRaw.replace(/\D/g, "");
+  const integerDigits = integerPartRaw.replace(/\D/g, "").slice(0, MAX_AMOUNT_DIGITS);
   const decimalDigits = decimalPartRaw.replace(/\D/g, "").slice(0, 2);
 
   const formattedInteger = integerDigits
@@ -1887,6 +1981,20 @@ function escapeHtml(value) {
 
 function normalizeText(value) {
   return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function normalizeTransactionType(value) {
+  const normalized = normalizeText(value);
+
+  if (["ငွေထုတ်", "withdraw", "cash out", "withdrawal"].includes(normalized)) {
+    return "ငွေထုတ်";
+  }
+
+  if (["ငွေသွင်း", "deposit", "cash in"].includes(normalized)) {
+    return "ငွေသွင်း";
+  }
+
+  return "";
 }
 
 function isValidPhoneNumber(value) {

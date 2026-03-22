@@ -3,14 +3,14 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { Pool } = require("pg");
-const Tesseract = require("tesseract.js");
 
 loadEnvFile(path.join(__dirname, ".env"));
 
 const HOST = process.env.HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT || 4173);
 const APP_TIME_ZONE = process.env.APP_TIME_ZONE || "Asia/Yangon";
-const OCR_LANGUAGES = process.env.OCR_LANGUAGES || "eng";
+const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || "").trim();
+const GEMINI_MODEL = String(process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
 const MAX_JSON_BODY_BYTES = 6_000_000;
 const DUPLICATE_WARNING_WINDOW_MINUTES = 5;
 const root = __dirname;
@@ -251,50 +251,29 @@ async function handleApiRequest(req, res, url) {
     }
 
     const body = await readJsonBody(req);
-    const imageDataUrl = String(body.imageDataUrl || "").trim();
+    const imagePayload = normalizeImageImportPayload(body);
 
-    if (!isSupportedImageDataUrl(imageDataUrl)) {
+    if (!imagePayload.fullImageDataUrl) {
       sendJson(res, 400, { message: "Please upload a valid image." });
       return;
     }
 
-    const extracted = await extractTransactionFromImage(imageDataUrl);
+    const extracted = await extractTransactionFromImage(imagePayload);
     const extractedTransactions = Array.isArray(extracted.transactions) ? extracted.transactions : [];
     const validTransactions = extractedTransactions
-      .map((item, index) => buildImportedTransaction(item, user, index))
+      .map((item) => buildImportedDraft(item))
       .filter(Boolean);
 
     if (!validTransactions.length) {
       sendJson(res, 422, {
-        message: "The image was read, but the transaction details were not clear enough to create automatically."
+        message: "The image was read, but the transaction details were not clear enough to fill the form automatically."
       });
       return;
     }
 
-    for (const transaction of validTransactions) {
-      await pool.query(
-        `INSERT INTO transactions (
-          id, type, customer_name, amount, phone_number, profit,
-          created_by_id, created_by_name, created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-        [
-          transaction.id,
-          transaction.type,
-          transaction.customerName,
-          transaction.amount,
-          transaction.phoneNumber,
-          transaction.profit,
-          transaction.createdById,
-          transaction.createdByName,
-          transaction.createdAt,
-          transaction.updatedAt
-        ]
-      );
-    }
-
-    sendJson(res, 201, {
-      transaction: validTransactions[0],
-      transactions: validTransactions,
+    sendJson(res, 200, {
+      draft: validTransactions[0],
+      drafts: validTransactions,
       extracted
     });
     return;
@@ -705,8 +684,14 @@ function toNumber(value) {
     return 0;
   }
 
-  const numeric = Number(String(value).replace(/,/g, "").replace(/[^\d.-]/g, ""));
+  const numeric = Number(normalizeAmountText(value).replace(/,/g, "").replace(/[^\d.-]/g, ""));
   return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function normalizeAmountText(value) {
+  return String(value || "")
+    .replace(/[−–—]/g, "-")
+    .replace(/[＋]/g, "+");
 }
 
 function calculateProfit(type, amount) {
@@ -727,6 +712,24 @@ function isSupportedImageDataUrl(value) {
   return /^data:image\/(png|jpe?g|webp);base64,/i.test(value);
 }
 
+function normalizeImageImportPayload(body) {
+  const fullImageDataUrl = String(body.fullImageDataUrl || body.imageDataUrl || "").trim();
+  const amountImageDataUrl = String(body.amountImageDataUrl || "").trim();
+  const detailsImageDataUrl = String(body.detailsImageDataUrl || "").trim();
+  const nameImageDataUrl = String(body.nameImageDataUrl || "").trim();
+  const phoneImageDataUrl = String(body.phoneImageDataUrl || "").trim();
+  const fallbackType = normalizeTransactionType(body.fallbackType);
+
+  return {
+    fullImageDataUrl: isSupportedImageDataUrl(fullImageDataUrl) ? fullImageDataUrl : "",
+    amountImageDataUrl: isSupportedImageDataUrl(amountImageDataUrl) ? amountImageDataUrl : "",
+    detailsImageDataUrl: isSupportedImageDataUrl(detailsImageDataUrl) ? detailsImageDataUrl : "",
+    nameImageDataUrl: isSupportedImageDataUrl(nameImageDataUrl) ? nameImageDataUrl : "",
+    phoneImageDataUrl: isSupportedImageDataUrl(phoneImageDataUrl) ? phoneImageDataUrl : "",
+    fallbackType
+  };
+}
+
 function normalizeTransactionType(value) {
   const normalized = normalizeText(value);
 
@@ -741,50 +744,326 @@ function normalizeTransactionType(value) {
   return "";
 }
 
-async function extractTransactionFromImage(imageDataUrl) {
-  const imageBuffer = decodeImageDataUrl(imageDataUrl);
+async function extractTransactionFromImage(imagePayload) {
+  if (!GEMINI_API_KEY) {
+    const error = new Error("Gemini OCR is not configured yet. Add GEMINI_API_KEY to your .env file.");
+    error.statusCode = 500;
+    throw error;
+  }
 
   try {
-    const result = await Tesseract.recognize(imageBuffer, OCR_LANGUAGES);
-    return parseTransactionsFromOcrText(result.data && result.data.text ? result.data.text : "");
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": GEMINI_API_KEY
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: buildGeminiImageImportParts(imagePayload)
+            }
+          ],
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: "application/json"
+          }
+        })
+      }
+    );
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(getGeminiErrorMessage(payload) || "Gemini could not read this image right now.");
+      error.statusCode = response.status >= 400 && response.status < 600 ? response.status : 502;
+      throw error;
+    }
+
+    const text = extractGeminiText(payload);
+    const transaction = parseGeminiImageImport(text, imagePayload.fallbackType);
+
+    return {
+      transactions: transaction ? [transaction] : [],
+      notes: text
+    };
   } catch (error) {
-    const ocrError = new Error("Local OCR could not read this image clearly.");
-    ocrError.statusCode = 502;
-    throw ocrError;
+    if (error.statusCode) {
+      throw error;
+    }
+
+    const geminiError = new Error("Gemini could not read this image clearly.");
+    geminiError.statusCode = 502;
+    throw geminiError;
   }
 }
 
-function decodeImageDataUrl(imageDataUrl) {
-  const match = imageDataUrl.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,(.+)$/);
+function buildGeminiImageImportParts(imagePayload) {
+  const fallbackType = normalizeTransactionType(imagePayload.fallbackType);
+  const parts = [
+    {
+      text: [
+        "Extract a single transaction from this payment receipt image and return JSON only.",
+        "Fields:",
+        '- "type": exactly "ငွေထုတ်", "ငွေသွင်း", or ""',
+        '- "customerName": the visible person/account name only; never include currency, IDs, or extra words',
+        '- "amount": the money amount only, as digits without sign or commas if possible',
+        '- "phoneNumber": only a real standalone phone number if visibly shown; otherwise ""',
+        "Rules:",
+        "- Ignore transaction IDs, reference numbers, and account numbers.",
+        "- The amount is the visible money amount, even if shown with a negative sign.",
+        "- Prefer the receipt text for type. Only use the fallback type if the receipt is unclear.",
+        "- If the name is unclear, return an empty string instead of guessing."
+      ].join("\n")
+    }
+  ];
+
+  if (fallbackType) {
+    parts.push({ text: `Fallback transaction type if the receipt is unclear: ${fallbackType}` });
+  }
+
+  if (imagePayload.fullImageDataUrl) {
+    parts.push({ text: "Full receipt image:" });
+    parts.push(makeGeminiInlineDataPart(imagePayload.fullImageDataUrl));
+  }
+
+  if (imagePayload.amountImageDataUrl) {
+    parts.push({ text: "Amount crop:" });
+    parts.push(makeGeminiInlineDataPart(imagePayload.amountImageDataUrl));
+  }
+
+  if (imagePayload.detailsImageDataUrl) {
+    parts.push({ text: "Details crop:" });
+    parts.push(makeGeminiInlineDataPart(imagePayload.detailsImageDataUrl));
+  }
+
+  if (imagePayload.nameImageDataUrl) {
+    parts.push({ text: "Name crop:" });
+    parts.push(makeGeminiInlineDataPart(imagePayload.nameImageDataUrl));
+  }
+
+  if (imagePayload.phoneImageDataUrl) {
+    parts.push({ text: "Phone/account-number crop:" });
+    parts.push(makeGeminiInlineDataPart(imagePayload.phoneImageDataUrl));
+  }
+
+  return parts;
+}
+
+function makeGeminiInlineDataPart(imageDataUrl) {
+  const match = String(imageDataUrl || "").match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
   if (!match) {
     const error = new Error("Please upload a valid image.");
     error.statusCode = 400;
     throw error;
   }
 
-  return Buffer.from(match[1], "base64");
+  return {
+    inlineData: {
+      mimeType: match[1],
+      data: match[2]
+    }
+  };
 }
 
-function parseTransactionsFromOcrText(text) {
-  const rawText = String(text || "");
-  const compactText = rawText.replace(/\s+/g, " ").trim();
+function extractGeminiText(payload) {
+  const candidates = Array.isArray(payload?.candidates) ? payload.candidates : [];
+  const parts = candidates.flatMap((candidate) => candidate?.content?.parts || []);
+  const text = parts.map((part) => part?.text || "").join("\n").trim();
+  return text;
+}
+
+function getGeminiErrorMessage(payload) {
+  return payload?.error?.message || "";
+}
+
+function parseGeminiImageImport(text, fallbackType = "") {
+  const raw = parseJsonText(text);
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const type = normalizeTransactionType(raw.type) || normalizeTransactionType(fallbackType);
+  const amount = toNumber(raw.amount);
+  const customerName = sanitizeDetectedName(raw.customerName || "");
+  const phoneNumber = extractPhoneFromText(raw.phoneNumber || "");
+
+  if (!type || amount <= 0) {
+    return null;
+  }
+
+  return {
+    type,
+    amount,
+    customerName,
+    phoneNumber
+  };
+}
+
+function parseJsonText(text) {
+  const raw = String(text || "").trim();
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    const fencedMatch = raw.match(/```json\s*([\s\S]*?)```/i) || raw.match(/```([\s\S]*?)```/);
+    if (!fencedMatch) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(fencedMatch[1].trim());
+    } catch (nestedError) {
+      return null;
+    }
+  }
+}
+
+function parseTransactionsFromOcrText(ocrPayload) {
+  const fullText = typeof ocrPayload === "string" ? ocrPayload : String(ocrPayload?.fullText || "");
+  const amountText = typeof ocrPayload === "string" ? "" : String(ocrPayload?.amountText || "");
+  const detailsText = typeof ocrPayload === "string" ? "" : String(ocrPayload?.detailsText || "");
+  const nameText = typeof ocrPayload === "string" ? "" : String(ocrPayload?.nameText || "");
+  const phoneText = typeof ocrPayload === "string" ? "" : String(ocrPayload?.phoneText || "");
+  const fallbackType = typeof ocrPayload === "string" ? "" : normalizeTransactionType(ocrPayload?.fallbackType);
+  const rawText = [fullText, detailsText].filter(Boolean).join("\n");
+  const compactText = [fullText, amountText, detailsText, nameText, phoneText].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
   const lines = rawText
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
+  const detailTransaction = extractTransactionFromDetailView(lines, compactText, { amountText, detailsText, nameText, phoneText, fallbackType });
 
   return {
-    transactions: extractTransactionsFromLines(lines, compactText),
+    transactions: detailTransaction ? [detailTransaction] : extractTransactionsFromLines(lines, compactText, fallbackType),
     notes: compactText
   };
 }
 
-function extractTransactionsFromLines(lines, compactText) {
+function extractTransactionFromDetailView(lines, compactText, extractedRegions = {}) {
+  const amountMatch = findBestDetailAmount(lines, compactText, extractedRegions.amountText);
+  const rawAmount = amountMatch?.rawAmount || "";
+  const amount = amountMatch?.amount || 0;
+
+  if (amount <= 0) {
+    return null;
+  }
+
+  const sign = getAmountSign(rawAmount);
+  const typeText = [compactText, extractedRegions.detailsText, extractedRegions.amountText, extractedRegions.nameText].filter(Boolean).join(" ");
+  const detectedType = detectTransactionType(typeText);
+  const type = detectedType || extractedRegions.fallbackType || inferTransactionTypeFromSign(sign) || "ငွေထုတ်";
+  if (!type) {
+    return null;
+  }
+
+  const phoneNumber = detectPhoneNearLine(lines, Math.max(0, Math.floor(lines.length / 2)), extractedRegions.phoneText);
+  const customerName = detectDetailCustomerName(lines, {
+    phoneNumber,
+    rawAmount,
+    type,
+    explicitNameText: extractedRegions.nameText,
+    contextText: [extractedRegions.detailsText, compactText].filter(Boolean).join("\n")
+  })
+    || detectCustomerNameAroundLine(lines, amountMatch?.lineIndex ?? Math.floor(lines.length / 2), phoneNumber)
+    || phoneNumber
+    || "OCR Import";
+
+  return {
+    customerName,
+    amount,
+    phoneNumber,
+    type,
+    confidence: 0.9
+  };
+}
+
+function findBestDetailAmount(lines, compactText, amountText = "") {
+  const candidates = [];
+  const sourceLines = Array.isArray(lines) ? lines : [];
+
+  sourceLines.forEach((line, index) => {
+    const matches = normalizeAmountText(line).match(/[+-]?\s*\d[\d,]*(?:\.\d{1,2})?/g) || [];
+    matches.forEach((match) => {
+      const rawAmount = match.replace(/\s+/g, "");
+      const amount = toNumber(rawAmount);
+      if (amount > 0) {
+        candidates.push({
+          rawAmount,
+          amount,
+          lineIndex: index,
+          priority: getAmountPriority(rawAmount, line)
+        });
+      }
+    });
+  });
+
+  if (!candidates.length) {
+    const compactMatches = normalizeAmountText(`${amountText} ${compactText}`).match(/[+-]?\s*\d[\d,]*(?:\.\d{1,2})?/g) || [];
+    compactMatches.forEach((match) => {
+      const rawAmount = match.replace(/\s+/g, "");
+      const amount = toNumber(rawAmount);
+      if (amount > 0) {
+        candidates.push({
+          rawAmount,
+          amount,
+          lineIndex: -1,
+          priority: getAmountPriority(rawAmount, `${amountText} ${compactText}`)
+        });
+      }
+    });
+  }
+
+  return candidates.sort((left, right) => {
+    if (right.priority !== left.priority) {
+      return right.priority - left.priority;
+    }
+
+    return right.amount - left.amount;
+  })[0] || null;
+}
+
+function getAmountPriority(rawAmount, sourceText = "") {
+  const normalizedAmount = normalizeAmountText(rawAmount).trim();
+  const normalizedSource = normalizeAmountText(sourceText);
+  let score = 0;
+
+  if (getAmountSign(normalizedAmount)) {
+    score += 5;
+  }
+
+  if (normalizedAmount.includes(",") || normalizedAmount.includes(".")) {
+    score += 4;
+  }
+
+  if (/ks|kyat|mmk/i.test(normalizedSource)) {
+    score += 3;
+  }
+
+  const digitsOnly = normalizedAmount.replace(/[^\d]/g, "");
+  if (digitsOnly.length >= 4 && digitsOnly.length <= 9) {
+    score += 2;
+  }
+
+  if (digitsOnly.length >= 12) {
+    score -= 6;
+  }
+
+  return score;
+}
+
+function extractTransactionsFromLines(lines, compactText, fallbackType = "") {
   const transactions = [];
 
   lines.forEach((line, index) => {
-    const signedAmountMatch = line.match(/[+-]\s*\d[\d,]*(?:\.\d{1,2})?/);
-    const unsignedAmountMatch = signedAmountMatch ? null : line.match(/\d[\d,]*(?:\.\d{1,2})?/);
+    const normalizedLine = normalizeAmountText(line);
+    const signedAmountMatch = normalizedLine.match(/[+-]\s*\d[\d,]*(?:\.\d{1,2})?/);
+    const unsignedAmountMatch = signedAmountMatch ? null : normalizedLine.match(/\d[\d,]*(?:\.\d{1,2})?/);
     const amountMatch = signedAmountMatch || unsignedAmountMatch;
 
     if (!amountMatch) {
@@ -797,10 +1076,10 @@ function extractTransactionsFromLines(lines, compactText) {
       return;
     }
 
-    const sign = rawAmount.startsWith("-") ? "-" : rawAmount.startsWith("+") ? "+" : "";
+    const sign = getAmountSign(rawAmount);
     const surroundingText = [lines[index - 1], lines[index], lines[index + 1]].filter(Boolean).join(" ");
     const detectedType = detectTransactionType(surroundingText || compactText);
-    const inferredType = detectedType || inferTransactionTypeFromSign(sign);
+    const inferredType = detectedType || inferTransactionTypeFromSign(sign) || fallbackType || "ငွေထုတ်";
     if (!inferredType) {
       return;
     }
@@ -820,11 +1099,25 @@ function extractTransactionsFromLines(lines, compactText) {
   return dedupeExtractedTransactions(transactions);
 }
 
+function getAmountSign(rawAmount) {
+  const normalized = normalizeAmountText(rawAmount).trim();
+  if (normalized.startsWith("-")) {
+    return "-";
+  }
+
+  if (normalized.startsWith("+")) {
+    return "+";
+  }
+
+  return "";
+}
+
 function detectTransactionType(text) {
   const normalized = normalizeText(text);
 
   if (
     normalized.includes("ငွေထုတ်") ||
+    normalized.includes("ငွလထတ") ||
     normalized.includes("withdraw") ||
     normalized.includes("cash out") ||
     normalized.includes("sent")
@@ -834,6 +1127,8 @@ function detectTransactionType(text) {
 
   if (
     normalized.includes("ငွေသွင်း") ||
+    normalized.includes("ငွသင") ||
+    normalized.includes("လဲ") ||
     normalized.includes("deposit") ||
     normalized.includes("cash in") ||
     normalized.includes("received")
@@ -856,11 +1151,41 @@ function inferTransactionTypeFromSign(sign) {
   return "";
 }
 
-function detectPhoneNearLine(lines, startIndex) {
+function detectPhoneNearLine(lines, startIndex, explicitPhoneText = "") {
+  const explicitPhone = extractPhoneFromText(explicitPhoneText);
+  if (explicitPhone) {
+    return explicitPhone;
+  }
+
   for (let index = Math.max(0, startIndex - 2); index <= Math.min(lines.length - 1, startIndex + 2); index += 1) {
-    const match = String(lines[index] || "").match(/(?:\+?95|09)\d{7,11}/);
-    if (match) {
-      return match[0];
+    const line = String(lines[index] || "").trim();
+    if (!line) {
+      continue;
+    }
+
+    const phoneNumber = extractPhoneFromText(line);
+    if (phoneNumber) {
+      return phoneNumber;
+    }
+  }
+
+  return "";
+}
+
+function extractPhoneFromText(text) {
+  const normalized = String(text || "")
+    .replace(/[^\d+\s-]/g, " ")
+    .replace(/\s+/g, " ");
+  const matches = normalized.match(/(?<!\d)(?:\+?95|09)[\d\s-]{7,14}(?!\d)/g) || [];
+
+  for (const match of matches) {
+    const compact = match.replace(/[^\d+]/g, "");
+    if (/^09\d{7,9}$/.test(compact)) {
+      return compact;
+    }
+
+    if (/^\+?959\d{7,9}$/.test(compact)) {
+      return `0${compact.replace(/^\+?95/, "")}`;
     }
   }
 
@@ -911,6 +1236,194 @@ function detectCustomerNameAroundLine(lines, amountIndex, phoneNumber) {
   return "";
 }
 
+function detectDetailCustomerName(lines, { phoneNumber, rawAmount, type, explicitNameText = "", contextText = "" }) {
+  const normalizedType = normalizeTransactionType(type);
+  const amountDigits = String(rawAmount || "").replace(/[^\d]/g, "");
+  const explicitName = sanitizeDetectedName(explicitNameText);
+  if (explicitName) {
+    return explicitName;
+  }
+  const contextualName = detectLatinStyleName(contextText);
+  if (contextualName) {
+    return contextualName;
+  }
+  const ignoredPatterns = [
+    /details/i,
+    /ok/i,
+    /success/i,
+    /received/i,
+    /sent/i,
+    /transaction/i,
+    /balance/i,
+    /amount/i,
+    /date/i,
+    /time/i,
+    /ks/i,
+    /^\d{1,2}\/\d{1,2}\/\d{2,4}/,
+    /^\d{1,2}:\d{2}(?::\d{2})?/,
+    /^[+-]?\d[\d,]*(?:\.\d{1,2})?$/
+  ];
+
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = String(lines[index] || "").trim();
+    if (!line || line === phoneNumber) {
+      continue;
+    }
+
+    if (normalizeTransactionType(line) === normalizedType) {
+      continue;
+    }
+
+    if (amountDigits && line.replace(/[^\d]/g, "").includes(amountDigits)) {
+      continue;
+    }
+
+    if (ignoredPatterns.some((pattern) => pattern.test(line))) {
+      continue;
+    }
+
+    if (/\d{5,}/.test(line)) {
+      continue;
+    }
+
+    if (!/[A-Za-z\u1000-\u109F]/.test(line)) {
+      continue;
+    }
+
+    return line;
+  }
+
+  return "";
+}
+
+function sanitizeDetectedName(value) {
+  const candidates = String(value || "")
+    .split(/\r?\n/)
+    .map((line) => sanitizeDetectedNameLine(line))
+    .filter(Boolean)
+    .sort((left, right) => scoreNameCandidate(right) - scoreNameCandidate(left));
+
+  return candidates.find((candidate) => scoreNameCandidate(candidate) > 0) || "";
+}
+
+function sanitizeDetectedNameLine(value) {
+  let line = String(value || "")
+    .replace(/[+-]?\s*\d[\d,]*(?:\.\d{1,2})?/g, " ")
+    .replace(/\b(?:ks|kyat|mmk)\b/gi, " ")
+    .replace(/[|:;~_=]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!line) {
+    return "";
+  }
+
+  if (/\d{5,}/.test(line)) {
+    return "";
+  }
+
+  if (!/[A-Za-z\u1000-\u109F]/.test(line)) {
+    return "";
+  }
+
+  if (/details|ok|transaction|amount|balance|date|time|ks/i.test(line)) {
+    return "";
+  }
+
+  if (/\b[A-Za-z]$/.test(line) && /\s/.test(line)) {
+    line = line.replace(/\s+[A-Za-z]$/, "").trim();
+  }
+
+  return repairLikelyMyanmarLatinName(line);
+}
+
+function detectLatinStyleName(text) {
+  const candidates = String(text || "")
+    .split(/\r?\n/)
+    .map((line) => sanitizeDetectedNameLine(line))
+    .filter((line) => /^[A-Za-z][A-Za-z\s.'-]+$/.test(line) && line.split(/\s+/).length >= 2)
+    .sort((left, right) => scoreNameCandidate(right) - scoreNameCandidate(left));
+
+  return candidates.find((candidate) => scoreNameCandidate(candidate) > 0) || "";
+}
+
+function repairLikelyMyanmarLatinName(value) {
+  const tokens = String(value || "").trim().split(/\s+/).filter(Boolean);
+  if (!tokens.length) {
+    return "";
+  }
+
+  const lastToken = tokens[tokens.length - 1];
+  if (/^aun$/i.test(lastToken) || /^au$/i.test(lastToken)) {
+    tokens[tokens.length - 1] = preserveWordCase(lastToken, "Aung");
+  }
+
+  return tokens.join(" ");
+}
+
+function scoreNameCandidate(value) {
+  const tokens = String(value || "").trim().split(/\s+/).filter(Boolean);
+  if (!tokens.length) {
+    return -10;
+  }
+
+  let score = 0;
+
+  if (tokens.length >= 2 && tokens.length <= 4) {
+    score += 3;
+  }
+
+  for (const token of tokens) {
+    if (/^[A-Z][a-z.'-]{1,}$/.test(token)) {
+      score += 3;
+      continue;
+    }
+
+    if (/^[\u1000-\u109F]+$/.test(token)) {
+      score += 3;
+      continue;
+    }
+
+    if (/^[A-Z]{3,}$/.test(token)) {
+      score -= 4;
+      continue;
+    }
+
+    if (/^[a-z]{2,}$/.test(token)) {
+      score -= 3;
+      continue;
+    }
+
+    score -= 1;
+  }
+
+  if (/^[a-z]/.test(tokens[0])) {
+    score -= 3;
+  }
+
+  if (tokens.some((token) => token.length === 1)) {
+    score -= 2;
+  }
+
+  return score;
+}
+
+function preserveWordCase(source, replacement) {
+  if (source === source.toUpperCase()) {
+    return replacement.toUpperCase();
+  }
+
+  if (source === source.toLowerCase()) {
+    return replacement.toLowerCase();
+  }
+
+  if (source[0] === source[0]?.toUpperCase()) {
+    return replacement;
+  }
+
+  return replacement.toLowerCase();
+}
+
 function dedupeExtractedTransactions(items) {
   const seen = new Set();
 
@@ -925,29 +1438,21 @@ function dedupeExtractedTransactions(items) {
   });
 }
 
-function buildImportedTransaction(item, user, index) {
+function buildImportedDraft(item) {
   const type = normalizeTransactionType(item.type);
   const amount = toNumber(item.amount);
-  const customerName = String(item.customerName || item.phoneNumber || "OCR Import").trim();
+  const customerName = sanitizeDetectedName(String(item.customerName || ""));
   const phoneNumber = String(item.phoneNumber || "").trim();
 
   if (!type || amount <= 0) {
     return null;
   }
 
-  const createdAt = nowStamp();
-
   return {
-    id: `tx-${Date.now()}-${index}`,
     type,
     customerName,
     amount,
-    phoneNumber,
-    profit: calculateProfit(type, amount),
-    createdById: user.id,
-    createdByName: user.fullName,
-    createdAt,
-    updatedAt: createdAt
+    phoneNumber
   };
 }
 

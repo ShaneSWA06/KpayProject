@@ -10,7 +10,7 @@ This app is now a role-based counter system for KBZPay / WavePay style operation
 - Cashier cannot see profit
 - Normal sign up creates `cashier` accounts only
 - Floating plus button to create transactions
-- Image upload OCR import that can create a transaction automatically using free local OCR
+- Image upload OCR import that fills the transaction form for review using Gemini
 - Transaction types:
   - `ငွေထုတ်`
   - `ငွေသွင်း`
@@ -34,7 +34,8 @@ This app is now a role-based counter system for KBZPay / WavePay style operation
 - `styles.css`: dashboard styling
 - `server.js`: API server, session handling, and Neon/Postgres integration
 - `.env`: local server configuration, including `DATABASE_URL`
-- `OCR_LANGUAGES`: optional Tesseract language pack setting for local OCR, defaults to `eng`
+- `GEMINI_API_KEY`: required for Gemini OCR image import
+- `GEMINI_MODEL`: optional Gemini model name, defaults to `gemini-2.5-flash`
 
 ## Run
 
@@ -61,28 +62,33 @@ This exports both JSON and CSV files into a timestamped folder inside `backups/`
 
 ## Image OCR Import
 
-The app now uses free local OCR via `tesseract.js`, so no paid API key is required.
+The app now uses the Gemini API to read receipt images and fill the transaction form for review.
+
+Required environment variable:
+
+```powershell
+GEMINI_API_KEY=your_gemini_api_key
+```
 
 Optional environment variable:
 
 ```powershell
-OCR_LANGUAGES=eng
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
-Then restart the server. Inside the transaction modal, use `Upload Image And Create` to send a receipt or screenshot to the OCR flow. The app will try to extract:
+Then restart the server. Inside the transaction modal, use `Upload Image And Fill Form` to send a receipt or screenshot to the OCR flow. The app will try to extract:
 
 - transaction type
 - customer name
 - amount
 - phone number
 
-and then create the transaction automatically.
+and fill the form so the cashier can review it before saving.
 
 Notes:
 
-- Local OCR is free, but less accurate than paid vision APIs.
-- The first OCR request can be slower because Tesseract may need to initialize language data.
-- If your screenshots contain Burmese text, you can experiment with `OCR_LANGUAGES=eng+mya`.
+- Gemini may still miss fields on blurry photos, so the cashier should review the filled form before saving.
+- The Gemini Developer API offers a free tier with rate limits; you need your own API key from Google AI Studio.
 
 ## Deploy To Railway
 
