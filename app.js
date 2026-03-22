@@ -16,7 +16,8 @@ const state = {
   deleteConfirmId: "",
   editingId: "",
   authTab: "login",
-  loading: true
+  loading: true,
+  pendingDuplicate: null
 };
 
 const app = document.getElementById("app");
@@ -176,6 +177,8 @@ function renderDashboard(user) {
   const paginatedTransactions = visibleTransactions.slice(pagination.startIndex, pagination.endIndex);
   const summary = summarizeTransactions(visibleTransactions);
   const dateProfitSummary = summarizeTransactions(getDateProfitTransactions(visibleTransactions));
+  const closingSummary = summarizeClosingTransactions(getClosingSummaryTransactions(state.transactions));
+  const closingSummaryLabel = getClosingSummaryLabel();
   const dateProfitLabel = getDateProfitLabel();
   const isAdmin = user.role === "admin";
 
@@ -222,7 +225,6 @@ function renderDashboard(user) {
             <div class="topbar-heading">
               <p class="eyebrow dark">Operations Dashboard</p>
               <h1>Daily Transactions</h1>
-              <p class="topbar-copy">Cashiers can create transactions. Admins can also view profit across the counter.</p>
             </div>
             <div class="topbar-actions">
               <button id="themeToggleDashboard" class="theme-toggle-button icon-only" type="button" aria-label="${getThemeLabel()}" title="${getThemeLabel()}">
@@ -252,7 +254,7 @@ function renderDashboard(user) {
           </div>
         </header>
 
-        <section class="stats-grid">
+        <section class="stats-grid dashboard-stats-section">
           <article class="stat-card">
             <span>Total Transactions</span>
             <strong>${summary.count}</strong>
@@ -286,8 +288,37 @@ function renderDashboard(user) {
           `}
         </section>
 
+        <section class="panel compact-panel closing-summary-section">
+          <div class="section-heading">
+            <h2>Daily Closing Summary</h2>
+            <p>${escapeHtml(closingSummaryLabel)}</p>
+          </div>
+          <div class="closing-summary-grid">
+            <article class="stat-card">
+              <span>Opening Count</span>
+              <strong>${closingSummary.openingCount}</strong>
+            </article>
+            <article class="stat-card">
+              <span>Total Deposit</span>
+              <strong>${formatAmount(closingSummary.totalDeposit)}</strong>
+            </article>
+            <article class="stat-card">
+              <span>Total Withdraw</span>
+              <strong>${formatAmount(closingSummary.totalWithdraw)}</strong>
+            </article>
+            <article class="stat-card accent">
+              <span>Total Profit</span>
+              <strong>${isAdmin ? formatProfit(closingSummary.totalProfit) : "Admin Only"}</strong>
+            </article>
+            <article class="stat-card">
+              <span>Cashier Count</span>
+              <strong>${closingSummary.cashierCount}</strong>
+            </article>
+          </div>
+        </section>
+
         ${isAdmin ? `
-          <section class="panel compact-panel">
+          <section class="panel compact-panel profit-summary-section">
             <div class="section-heading">
               <h2>Profit By Transaction Type</h2>
               <p>Visible only to admin accounts.</p>
@@ -305,7 +336,7 @@ function renderDashboard(user) {
           </section>
         ` : ""}
 
-        <section class="panel">
+        <section class="panel transaction-list-section">
           <div class="section-heading">
             <h2>Transaction List</h2>
             <p>The plus button creates new transactions with name, amount, and optional phone number.</p>
@@ -318,11 +349,13 @@ function renderDashboard(user) {
             </div>
             <div class="pagination-actions">
               <button id="paginationPrevButton" class="secondary-button pagination-arrow" type="button" aria-label="Previous page" ${pagination.currentPage === 1 ? "disabled" : ""}>${getPaginationArrowSvg("left")}</button>
-              <label class="pagination-input-group">
-                <span>Page</span>
-                <input id="paginationPageInput" class="pagination-page-input" type="number" min="1" max="${pagination.totalPages}" value="${pagination.currentPage}">
-              </label>
-              <span class="pagination-page">of ${pagination.totalPages}</span>
+              <div class="pagination-center-group">
+                <label class="pagination-input-group">
+                  <span>Page</span>
+                  <input id="paginationPageInput" class="pagination-page-input" type="number" min="1" max="${pagination.totalPages}" value="${pagination.currentPage}">
+                </label>
+                <span class="pagination-page">of ${pagination.totalPages}</span>
+              </div>
               <button id="paginationNextButton" class="secondary-button pagination-arrow" type="button" aria-label="Next page" ${pagination.currentPage === pagination.totalPages ? "disabled" : ""}>${getPaginationArrowSvg("right")}</button>
             </div>
           </div>
@@ -407,6 +440,7 @@ function renderDashboard(user) {
 
       ${renderDetailsModal(isAdmin)}
       ${renderDeleteConfirmModal()}
+      ${renderDuplicateConfirmModal()}
     </div>
   `;
 }
@@ -450,6 +484,14 @@ function renderDeleteConfirmModal() {
   return `
     <div class="modal-backdrop ${tx ? "visible" : ""}" id="deleteConfirmBackdrop">
       ${tx ? getDeleteConfirmModalContent(tx) : ""}
+    </div>
+  `;
+}
+
+function renderDuplicateConfirmModal() {
+  return `
+    <div class="modal-backdrop ${state.pendingDuplicate ? "visible" : ""}" id="duplicateConfirmBackdrop">
+      ${state.pendingDuplicate ? getDuplicateConfirmModalContent(state.pendingDuplicate) : ""}
     </div>
   `;
 }
@@ -832,43 +874,7 @@ function bindDashboardEvents() {
   if (transactionForm) {
     transactionForm.addEventListener("submit", async (event) => {
       event.preventDefault();
-      const type = document.getElementById("transactionType").value;
-      const customerName = document.getElementById("customerName").value.trim();
-      const amount = toNumber(document.getElementById("amount").value);
-      const phoneNumber = document.getElementById("phoneNumber").value.trim();
-      const message = document.getElementById("transactionMessage");
-
-      if (!customerName || amount <= 0) {
-        message.textContent = "Name and money are required.";
-        return;
-      }
-
-      message.textContent = "";
-
-      try {
-        const endpoint = state.editingId
-          ? `/api/transactions/${encodeURIComponent(state.editingId)}`
-          : "/api/transactions";
-        const method = state.editingId ? "PUT" : "POST";
-        const payload = await api(endpoint, {
-          method,
-          body: JSON.stringify({ type, customerName, amount, phoneNumber })
-        });
-
-        if (state.editingId) {
-          state.transactions = state.transactions.map((tx) => (
-            tx.id === payload.transaction.id ? payload.transaction : tx
-          ));
-        } else {
-          state.transactions.unshift(payload.transaction);
-          state.currentPage = 1;
-        }
-
-        closeModal();
-        render();
-      } catch (error) {
-        message.textContent = error.message;
-      }
+      await submitTransactionForm();
     });
   }
 
@@ -935,6 +941,7 @@ function bindDashboardEvents() {
 function closeModal() {
   state.modalOpen = false;
   state.editingId = "";
+  state.pendingDuplicate = null;
   render();
 }
 
@@ -1017,6 +1024,56 @@ function closeDeleteConfirm() {
   }
 }
 
+function openDuplicateConfirm(payload, duplicate) {
+  state.pendingDuplicate = {
+    payload,
+    duplicate
+  };
+
+  const duplicateConfirmBackdrop = document.getElementById("duplicateConfirmBackdrop");
+  if (!duplicateConfirmBackdrop) {
+    render();
+    return;
+  }
+
+  duplicateConfirmBackdrop.innerHTML = getDuplicateConfirmModalContent(state.pendingDuplicate);
+  duplicateConfirmBackdrop.classList.add("visible");
+
+  const closeButton = document.getElementById("closeDuplicateConfirmButton");
+  const cancelButton = document.getElementById("cancelDuplicateConfirmButton");
+  const confirmButton = document.getElementById("confirmDuplicateButton");
+
+  if (closeButton) {
+    closeButton.addEventListener("click", closeDuplicateConfirm);
+  }
+
+  if (cancelButton) {
+    cancelButton.addEventListener("click", closeDuplicateConfirm);
+  }
+
+  if (confirmButton) {
+    confirmButton.addEventListener("click", confirmDuplicateTransaction);
+  }
+}
+
+function closeDuplicateConfirm() {
+  state.pendingDuplicate = null;
+  const duplicateConfirmBackdrop = document.getElementById("duplicateConfirmBackdrop");
+  if (duplicateConfirmBackdrop) {
+    duplicateConfirmBackdrop.classList.remove("visible");
+    duplicateConfirmBackdrop.innerHTML = "";
+  }
+}
+
+async function confirmDuplicateTransaction() {
+  const pendingDuplicate = state.pendingDuplicate;
+  if (!pendingDuplicate) {
+    return;
+  }
+
+  await submitTransactionForm({ allowDuplicate: true, draft: pendingDuplicate.payload });
+}
+
 async function confirmDeleteTransaction() {
   const id = state.deleteConfirmId;
   if (!id) {
@@ -1050,6 +1107,35 @@ function getDeleteConfirmModalContent(tx) {
       <div class="confirm-actions">
         <button id="cancelDeleteConfirmButton" class="secondary-button" type="button">Cancel</button>
         <button id="confirmDeleteButton" class="secondary-button danger-button" type="button">Delete</button>
+      </div>
+    </section>
+  `;
+}
+
+function getDuplicateConfirmModalContent(pendingDuplicate) {
+  const duplicate = pendingDuplicate.duplicate;
+  return `
+    <section class="modal-card confirm-card">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow dark">Duplicate Warning</p>
+          <h2>Possible duplicate transaction</h2>
+        </div>
+        <button id="closeDuplicateConfirmButton" class="icon-button" type="button" aria-label="Close duplicate warning">x</button>
+      </div>
+      <p class="confirm-copy">
+        A transaction with the same phone number and amount was already saved at <strong>${escapeHtml(duplicate.createdAt)}</strong>.
+      </p>
+      <div class="details-grid confirm-match-card">
+        <div class="details-item"><span>Name</span><strong>${escapeHtml(duplicate.customerName)}</strong></div>
+        <div class="details-item"><span>Phone</span><strong>${escapeHtml(duplicate.phoneNumber || "-")}</strong></div>
+        <div class="details-item"><span>Amount</span><strong>${formatAmount(duplicate.amount)}</strong></div>
+        <div class="details-item"><span>Created By</span><strong>${escapeHtml(duplicate.createdByName)}</strong></div>
+      </div>
+      <p class="confirm-copy confirm-note">Continue only if this is really a new transaction.</p>
+      <div class="confirm-actions">
+        <button id="cancelDuplicateConfirmButton" class="secondary-button" type="button">Go Back</button>
+        <button id="confirmDuplicateButton" class="secondary-button danger-button" type="button">Save Anyway</button>
       </div>
     </section>
   `;
@@ -1113,6 +1199,7 @@ function openCreateModal() {
   if (message) {
     message.textContent = "";
   }
+  closeDuplicateConfirm();
   const imageImportInput = document.getElementById("imageImportInput");
   if (imageImportInput) {
     imageImportInput.value = "";
@@ -1157,6 +1244,8 @@ function openEditModal(tx) {
     });
     return;
   }
+
+  closeDuplicateConfirm();
 
   modalBackdrop.classList.add("visible");
   if (transactionId) {
@@ -1209,6 +1298,57 @@ function updateProfitPreview() {
   }
 
   preview.textContent = formatProfit(calculateProfit(typeInput.value, amountInput.value));
+}
+
+async function submitTransactionForm({ allowDuplicate = false, draft = null } = {}) {
+  const type = draft?.type ?? document.getElementById("transactionType")?.value;
+  const customerName = draft?.customerName ?? document.getElementById("customerName")?.value.trim();
+  const amount = draft?.amount ?? toNumber(document.getElementById("amount")?.value);
+  const phoneNumber = draft?.phoneNumber ?? document.getElementById("phoneNumber")?.value.trim();
+  const message = document.getElementById("transactionMessage");
+
+  if (!customerName || amount <= 0) {
+    if (message) {
+      message.textContent = "Name and money are required.";
+    }
+    return;
+  }
+
+  if (message) {
+    message.textContent = "";
+  }
+
+  try {
+    const endpoint = state.editingId
+      ? `/api/transactions/${encodeURIComponent(state.editingId)}`
+      : "/api/transactions";
+    const method = state.editingId ? "PUT" : "POST";
+    const payload = await api(endpoint, {
+      method,
+      body: JSON.stringify({ type, customerName, amount, phoneNumber, allowDuplicate })
+    });
+
+    if (state.editingId) {
+      state.transactions = state.transactions.map((tx) => (
+        tx.id === payload.transaction.id ? payload.transaction : tx
+      ));
+    } else {
+      state.transactions.unshift(payload.transaction);
+      state.currentPage = 1;
+    }
+
+    closeDuplicateConfirm();
+    closeModal();
+  } catch (error) {
+    if (!state.editingId && error.status === 409 && error.payload?.duplicate) {
+      openDuplicateConfirm({ type, customerName, amount, phoneNumber }, error.payload.duplicate);
+      return;
+    }
+
+    if (message) {
+      message.textContent = error.message;
+    }
+  }
 }
 
 async function prepareImageForUpload(file) {
@@ -1375,6 +1515,50 @@ function getDateProfitLabel() {
   return `Profit On ${getTodayDatePrefix()}`;
 }
 
+function getClosingSummaryTransactions(items) {
+  const targetDate = state.filterDate || getTodayDatePrefix();
+  return items.filter((tx) => getTransactionDate(tx.createdAt) === targetDate);
+}
+
+function summarizeClosingTransactions(items) {
+  const cashierIds = new Set();
+
+  return items.reduce((summary, tx) => {
+    const amount = toNumber(tx.amount);
+    const profit = toNumber(tx.profit);
+
+    summary.openingCount += 1;
+    summary.totalProfit += profit;
+
+    if (tx.type === "ငွေသွင်း") {
+      summary.totalDeposit += amount;
+    }
+
+    if (tx.type === "ငွေထုတ်") {
+      summary.totalWithdraw += amount;
+    }
+
+    if (tx.createdById) {
+      cashierIds.add(tx.createdById);
+      summary.cashierCount = cashierIds.size;
+    }
+
+    return summary;
+  }, {
+    openingCount: 0,
+    totalDeposit: 0,
+    totalWithdraw: 0,
+    totalProfit: 0,
+    cashierCount: 0
+  });
+}
+
+function getClosingSummaryLabel() {
+  return state.filterDate
+    ? `Based on all transactions from ${state.filterDate}`
+    : `Based on all transactions from ${getTodayDatePrefix()}`;
+}
+
 async function hydrateSession() {
   try {
     const payload = await api("/api/session");
@@ -1408,7 +1592,10 @@ async function api(url, options = {}) {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.message || "Request failed.");
+    const error = new Error(payload.message || "Request failed.");
+    error.status = response.status;
+    error.payload = payload;
+    throw error;
   }
 
   return payload;

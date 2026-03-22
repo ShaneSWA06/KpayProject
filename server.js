@@ -12,6 +12,7 @@ const PORT = Number(process.env.PORT || 4173);
 const APP_TIME_ZONE = process.env.APP_TIME_ZONE || "Asia/Yangon";
 const OCR_LANGUAGES = process.env.OCR_LANGUAGES || "eng";
 const MAX_JSON_BODY_BYTES = 6_000_000;
+const DUPLICATE_WARNING_WINDOW_MINUTES = 5;
 const root = __dirname;
 const sessions = new Map();
 
@@ -176,9 +177,23 @@ async function handleApiRequest(req, res, url) {
       const customerName = String(body.customerName || "").trim();
       const amount = toNumber(body.amount);
       const phoneNumber = String(body.phoneNumber || "").trim();
+      const allowDuplicate = Boolean(body.allowDuplicate);
 
       if (!customerName || amount <= 0 || !["ငွေထုတ်", "ငွေသွင်း"].includes(type)) {
         sendJson(res, 400, { message: "Valid transaction details are required." });
+        return;
+      }
+
+      const createdAt = nowStamp();
+      const duplicate = allowDuplicate
+        ? null
+        : await findRecentDuplicateTransaction({ phoneNumber, amount, referenceStamp: createdAt });
+
+      if (duplicate) {
+        sendJson(res, 409, {
+          message: "A similar transaction was already saved a few minutes ago.",
+          duplicate
+        });
         return;
       }
 
@@ -191,8 +206,8 @@ async function handleApiRequest(req, res, url) {
         profit: calculateProfit(type, amount),
         createdById: user.id,
         createdByName: user.fullName,
-        createdAt: nowStamp(),
-        updatedAt: nowStamp()
+        createdAt,
+        updatedAt: createdAt
       };
 
       await pool.query(
@@ -507,6 +522,54 @@ function mapTransactionRow(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
+}
+
+async function findRecentDuplicateTransaction({ phoneNumber, amount, referenceStamp }) {
+  const normalizedPhone = String(phoneNumber || "").trim();
+  if (!normalizedPhone || amount <= 0) {
+    return null;
+  }
+
+  const result = await pool.query(
+    `SELECT
+      id,
+      type,
+      customer_name,
+      amount,
+      phone_number,
+      profit,
+      created_by_id,
+      created_by_name,
+      created_at,
+      updated_at
+     FROM transactions
+     WHERE phone_number = $1
+       AND amount = $2
+     ORDER BY created_at DESC
+     LIMIT 5`,
+    [normalizedPhone, amount]
+  );
+
+  const referenceTime = parseStampToUtcMs(referenceStamp);
+  if (!Number.isFinite(referenceTime)) {
+    return null;
+  }
+
+  for (const row of result.rows) {
+    const transaction = mapTransactionRow(row);
+    const createdTime = parseStampToUtcMs(transaction.createdAt);
+
+    if (!Number.isFinite(createdTime)) {
+      continue;
+    }
+
+    const minutesApart = Math.abs(referenceTime - createdTime) / 60000;
+    if (minutesApart <= DUPLICATE_WARNING_WINDOW_MINUTES) {
+      return transaction;
+    }
+  }
+
+  return null;
 }
 
 function sanitizeUserRow(row) {
@@ -889,6 +952,16 @@ function nowStamp() {
   const hours = parts.hour;
   const minutes = parts.minute;
   return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
+
+function parseStampToUtcMs(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/);
+  if (!match) {
+    return NaN;
+  }
+
+  const [, year, month, day, hour, minute] = match;
+  return Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
 }
 
 start().catch((error) => {

@@ -640,6 +640,7 @@ body.theme-switching .theme-toggle-icon svg {
 }
 
 .stats-grid,
+.closing-summary-grid,
 .type-summary-grid {
   display: grid;
   gap: 14px;
@@ -647,6 +648,11 @@ body.theme-switching .theme-toggle-icon svg {
 
 .stats-grid {
   grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.closing-summary-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-top: 14px;
 }
 
 .type-summary-grid {
@@ -734,6 +740,12 @@ body.theme-switching .theme-toggle-icon svg {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.pagination-center-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .pagination-arrow {
@@ -876,6 +888,10 @@ tbody tr:hover {
   flex-wrap: wrap;
 }
 
+.row-actions [data-action="details"] {
+  display: none;
+}
+
 .details-card {
   max-width: 520px;
 }
@@ -926,6 +942,14 @@ tbody tr:hover {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 18px;
+}
+
+.confirm-match-card {
+  margin-top: 16px;
+}
+
+.confirm-note {
+  margin-top: 14px;
 }
 
 .mini-button {
@@ -1224,6 +1248,8 @@ code {
 
   .content {
     order: 1;
+    display: flex;
+    flex-direction: column;
     gap: 12px;
     padding-bottom: 84px;
   }
@@ -1258,7 +1284,7 @@ code {
 
   .topbar-main {
     width: 100%;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
   }
 
@@ -1279,6 +1305,26 @@ code {
     gap: 8px;
     margin-top: 2px;
     width: 100%;
+  }
+
+  .topbar {
+    order: 1;
+  }
+
+  .transaction-list-section {
+    order: 2;
+  }
+
+  .dashboard-stats-section {
+    order: 3;
+  }
+
+  .closing-summary-section {
+    order: 4;
+  }
+
+  .profit-summary-section {
+    order: 5;
   }
 
   .search-input,
@@ -1341,12 +1387,21 @@ code {
     line-height: 1.1;
   }
 
+  .topbar .eyebrow {
+    display: none;
+  }
+
   .topbar-copy {
     margin-top: 4px;
     font-size: 0.95rem;
   }
 
   .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .closing-summary-grid {
     grid-template-columns: 1fr;
     gap: 10px;
   }
@@ -1471,26 +1526,48 @@ code {
   }
 
   .pagination-actions {
-    align-items: stretch;
-  }
-
-  .pagination-actions {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) 48px;
+    align-items: center;
     width: 100%;
-    justify-content: space-between;
+    gap: 10px;
   }
 
   .pagination-arrow {
     flex: 0 0 48px;
   }
 
+  #paginationPrevButton {
+    grid-column: 1;
+  }
+
   .pagination-page {
+    display: inline-flex;
+    align-items: center;
     flex: 0 0 auto;
     text-align: center;
+    white-space: nowrap;
+  }
+
+  .pagination-center-group {
+    grid-column: 2;
+    justify-self: center;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .pagination-input-group {
-    flex: 1 1 auto;
+    display: inline-flex;
+    align-items: center;
     justify-content: center;
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+
+  #paginationNextButton {
+    grid-column: 3;
+    justify-self: end;
   }
 
   .modal-backdrop {
@@ -1526,6 +1603,10 @@ code {
     justify-content: flex-end;
     gap: 6px;
     flex-wrap: nowrap;
+  }
+
+  .row-actions [data-action="details"] {
+    display: inline-flex;
   }
 
   .icon-action-button {
@@ -1622,7 +1703,8 @@ code {
     content: attr(data-label);
     position: absolute;
     left: 12px;
-    top: 9px;
+    top: 50%;
+    transform: translateY(-50%);
     width: 80px;
     color: var(--muted);
     font-size: 10px;
@@ -1653,8 +1735,12 @@ code {
   }
 
   .row-actions {
-    justify-content: flex-start;
+    justify-content: flex-end;
     gap: 10px;
+  }
+
+  .row-actions [data-action="details"] {
+    display: inline-flex;
   }
 
   .column-action {
