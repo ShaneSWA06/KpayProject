@@ -104,6 +104,15 @@ function getPaginationArrowSvg(direction) {
   `;
 }
 
+function getCloseIconSvg() {
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 6l12 12"></path>
+      <path d="M18 6l-12 12"></path>
+    </svg>
+  `;
+}
+
 function renderAuth() {
   return `
     <main class="auth-shell">
@@ -406,7 +415,7 @@ function renderDashboard(user) {
               <p class="eyebrow dark">New Counter Transaction</p>
               <h2>${state.editingId ? "Edit Transaction" : "Create Transaction"}</h2>
             </div>
-            <button id="closeModalButton" class="icon-button" type="button">x</button>
+            <button id="closeModalButton" class="icon-button" type="button" aria-label="Close transaction modal">${getCloseIconSvg()}</button>
           </div>
 
           <form id="transactionForm" class="modal-form">
@@ -425,11 +434,11 @@ function renderDashboard(user) {
             </label>
             <label>
               <span>Money (MMK)</span>
-              <input id="amount" type="number" min="0" step="0.01" required placeholder="Enter amount">
+              <input id="amount" type="text" inputmode="decimal" autocomplete="off" required placeholder="Enter amount">
             </label>
             <label>
               <span>Phone Number (Optional)</span>
-              <input id="phoneNumber" type="text" placeholder="09xxxxxxxxx">
+              <input id="phoneNumber" type="text" inputmode="numeric" autocomplete="tel" placeholder="09xxxxxxxxx">
             </label>
             <div class="image-import-card">
               <div>
@@ -443,8 +452,8 @@ function renderDashboard(user) {
               <span>Profit Rule Preview</span>
               <strong id="profitPreview">${isAdmin ? "0.00 MMK" : "Admin Only"}</strong>
             </div>
+            <p id="transactionMessage" class="form-message transaction-message-banner hidden" role="alert" aria-live="polite"></p>
             <button class="primary-button full-width" type="submit">${state.editingId ? "Update Transaction" : "Save Transaction"}</button>
-            <p id="transactionMessage" class="form-message"></p>
           </form>
         </section>
       </div>
@@ -959,7 +968,10 @@ function bindDashboardEvents() {
   }
 
   if (amountInput) {
-    amountInput.addEventListener("input", updateProfitPreview);
+    amountInput.addEventListener("input", () => {
+      amountInput.value = formatEditableAmount(amountInput.value);
+      updateProfitPreview();
+    });
   }
 
   if (transactionForm) {
@@ -987,9 +999,7 @@ function bindDashboardEvents() {
 
       imageImportButton.disabled = true;
       imageImportButton.textContent = "Reading image...";
-      if (message) {
-        message.textContent = "Scanning image and creating transaction...";
-      }
+      setTransactionMessage(message, "Scanning image and creating transaction...");
 
       try {
         const imageDataUrl = await prepareImageForUpload(file);
@@ -1016,9 +1026,7 @@ function bindDashboardEvents() {
             : `${importedTransactions.length} transactions were created from the uploaded image.`
         );
       } catch (error) {
-        if (message) {
-          message.textContent = error.message;
-        }
+        setTransactionMessage(message, error.message);
       } finally {
         imageImportButton.disabled = false;
         imageImportButton.textContent = originalLabel;
@@ -1069,7 +1077,7 @@ function getDetailsModalContent(tx, isAdmin) {
           <p class="eyebrow dark">Transaction Details</p>
           <h2>${escapeHtml(tx.customerName)}</h2>
         </div>
-        <button id="closeDetailsButton" class="icon-button" type="button" aria-label="Close details">x</button>
+        <button id="closeDetailsButton" class="icon-button" type="button" aria-label="Close details">${getCloseIconSvg()}</button>
       </div>
       <div class="details-grid">
         <div class="details-item"><span>Date</span><strong>${escapeHtml(tx.createdAt)}</strong></div>
@@ -1206,7 +1214,7 @@ function getDeleteConfirmModalContent(tx) {
           <p class="eyebrow dark">Delete Transaction</p>
           <h2>Delete this transaction?</h2>
         </div>
-        <button id="closeDeleteConfirmButton" class="icon-button" type="button" aria-label="Close delete confirmation">x</button>
+        <button id="closeDeleteConfirmButton" class="icon-button" type="button" aria-label="Close delete confirmation">${getCloseIconSvg()}</button>
       </div>
       <p class="confirm-copy">
         Are you sure you want to delete <strong>${escapeHtml(tx.customerName)}</strong> for <strong>${formatAmount(tx.amount)}</strong>?
@@ -1229,7 +1237,7 @@ function getDuplicateConfirmModalContent(pendingDuplicate) {
           <p class="eyebrow dark">Duplicate Warning</p>
           <h2>Possible duplicate transaction</h2>
         </div>
-        <button id="closeDuplicateConfirmButton" class="icon-button" type="button" aria-label="Close duplicate warning">x</button>
+        <button id="closeDuplicateConfirmButton" class="icon-button" type="button" aria-label="Close duplicate warning">${getCloseIconSvg()}</button>
       </div>
       <p class="confirm-copy">
         A transaction with the ${duplicateBasis} was already saved at <strong>${escapeHtml(duplicate.createdAt)}</strong>.
@@ -1304,9 +1312,7 @@ function openCreateModal() {
   customerName.value = "";
   amount.value = "";
   phoneNumber.value = "";
-  if (message) {
-    message.textContent = "";
-  }
+  clearTransactionMessage(message);
   closeDuplicateConfirm();
   state.calendarOpen = false;
   const imageImportInput = document.getElementById("imageImportInput");
@@ -1363,7 +1369,7 @@ function openEditModal(tx) {
   }
   transactionType.value = tx.type;
   customerName.value = tx.customerName;
-  amount.value = tx.amount;
+  amount.value = formatEditableAmount(String(tx.amount));
   phoneNumber.value = tx.phoneNumber || "";
   if (heading) {
     heading.textContent = "Edit Transaction";
@@ -1372,7 +1378,7 @@ function openEditModal(tx) {
     submitButton.textContent = "Update Transaction";
   }
   if (message) {
-    message.textContent = "";
+    clearTransactionMessage(message);
   }
 
   window.requestAnimationFrame(() => {
@@ -1410,6 +1416,24 @@ function updateProfitPreview() {
   preview.textContent = formatProfit(calculateProfit(typeInput.value, amountInput.value));
 }
 
+function setTransactionMessage(message, text) {
+  if (!message) {
+    return;
+  }
+
+  message.textContent = text;
+  message.classList.remove("hidden");
+}
+
+function clearTransactionMessage(message) {
+  if (!message) {
+    return;
+  }
+
+  message.textContent = "";
+  message.classList.add("hidden");
+}
+
 async function submitTransactionForm({ allowDuplicate = false, draft = null } = {}) {
   const type = draft?.type ?? document.getElementById("transactionType")?.value;
   const customerName = draft?.customerName ?? document.getElementById("customerName")?.value.trim();
@@ -1417,16 +1441,22 @@ async function submitTransactionForm({ allowDuplicate = false, draft = null } = 
   const phoneNumber = draft?.phoneNumber ?? document.getElementById("phoneNumber")?.value.trim();
   const message = document.getElementById("transactionMessage");
 
-  if (!customerName || amount <= 0) {
-    if (message) {
-      message.textContent = "Name and money are required.";
-    }
+  if (!customerName) {
+    setTransactionMessage(message, "Name is required.");
     return;
   }
 
-  if (message) {
-    message.textContent = "";
+  if (amount <= 0) {
+    setTransactionMessage(message, "Amount must be greater than 0.");
+    return;
   }
+
+  if (phoneNumber && !isValidPhoneNumber(phoneNumber)) {
+    setTransactionMessage(message, "Phone number must start with 09 and have 9 to 11 digits.");
+    return;
+  }
+
+  clearTransactionMessage(message);
 
   try {
     const endpoint = state.editingId
@@ -1455,9 +1485,7 @@ async function submitTransactionForm({ allowDuplicate = false, draft = null } = 
       return;
     }
 
-    if (message) {
-      message.textContent = error.message;
-    }
+    setTransactionMessage(message, error.message);
   }
 }
 
@@ -1804,6 +1832,43 @@ function formatAmount(value) {
   }).format(value)} MMK`;
 }
 
+function formatEditableAmount(value) {
+  const raw = String(value || "").replace(/,/g, "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  const sanitized = raw
+    .replace(/[^\d.]/g, "")
+    .replace(/(\..*)\./g, "$1");
+
+  if (!sanitized) {
+    return "";
+  }
+
+  const hasTrailingDot = sanitized.endsWith(".");
+  const [integerPartRaw, decimalPartRaw = ""] = sanitized.split(".");
+  const integerDigits = integerPartRaw.replace(/\D/g, "");
+  const decimalDigits = decimalPartRaw.replace(/\D/g, "").slice(0, 2);
+
+  const formattedInteger = integerDigits
+    ? new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(Number(integerDigits))
+    : "0";
+
+  if (hasTrailingDot) {
+    return `${formattedInteger}.`;
+  }
+
+  if (sanitized.includes(".")) {
+    return `${formattedInteger}.${decimalDigits}`;
+  }
+
+  return formattedInteger;
+}
+
 function formatProfit(value) {
   return `${new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 2,
@@ -1822,6 +1887,10 @@ function escapeHtml(value) {
 
 function normalizeText(value) {
   return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function isValidPhoneNumber(value) {
+  return /^09\d{7,9}$/.test(String(value || "").trim());
 }
 
 function calculateProfit(type, amount) {

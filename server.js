@@ -179,8 +179,18 @@ async function handleApiRequest(req, res, url) {
       const phoneNumber = String(body.phoneNumber || "").trim();
       const allowDuplicate = Boolean(body.allowDuplicate);
 
-      if (!customerName || amount <= 0 || !["ငွေထုတ်", "ငွေသွင်း"].includes(type)) {
+      if (!customerName || !["ငွေထုတ်", "ငွေသွင်း"].includes(type)) {
         sendJson(res, 400, { message: "Valid transaction details are required." });
+        return;
+      }
+
+      if (amount <= 0) {
+        sendJson(res, 400, { message: "Amount must be greater than 0." });
+        return;
+      }
+
+      if (phoneNumber && !isValidPhoneNumber(phoneNumber)) {
+        sendJson(res, 400, { message: "Phone number must start with 09 and have 9 to 11 digits." });
         return;
       }
 
@@ -313,8 +323,18 @@ async function handleApiRequest(req, res, url) {
       const amount = toNumber(body.amount);
       const phoneNumber = String(body.phoneNumber || "").trim();
 
-      if (!customerName || amount <= 0 || !["ငွေထုတ်", "ငွေသွင်း"].includes(type)) {
+      if (!customerName || !["ငွေထုတ်", "ငွေသွင်း"].includes(type)) {
         sendJson(res, 400, { message: "Valid transaction details are required." });
+        return;
+      }
+
+      if (amount <= 0) {
+        sendJson(res, 400, { message: "Amount must be greater than 0." });
+        return;
+      }
+
+      if (phoneNumber && !isValidPhoneNumber(phoneNumber)) {
+        sendJson(res, 400, { message: "Phone number must start with 09 and have 9 to 11 digits." });
         return;
       }
 
@@ -674,6 +694,10 @@ function sendJson(res, statusCode, payload) {
 
 function normalizeText(value) {
   return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function isValidPhoneNumber(value) {
+  return /^09\d{7,9}$/.test(String(value || "").trim());
 }
 
 function toNumber(value) {

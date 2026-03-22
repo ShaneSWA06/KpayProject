@@ -1152,17 +1152,48 @@ tbody tr:hover {
 }
 
 .icon-button {
-  width: 40px;
-  height: 40px;
+  width: 52px;
+  height: 52px;
   border-radius: 12px;
   background: var(--surface-2);
   border-color: var(--border);
   color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-button svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .modal-form {
   display: grid;
   gap: 14px;
+}
+
+.transaction-message-banner {
+  display: block;
+  padding: 12px 14px;
+  border: 1px solid rgba(178, 79, 56, 0.2);
+  border-radius: 14px;
+  background: var(--warning-soft);
+  color: var(--danger);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.transaction-message-banner.hidden {
+  display: none;
 }
 
 .type-toggle-group {
