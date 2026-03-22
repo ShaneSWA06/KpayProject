@@ -12,6 +12,9 @@ const state = {
   theme: loadTheme(),
   search: "",
   filterDate: "",
+  filterTimeFrom: "",
+  filterTimeTo: "",
+  timePickerOpen: "",
   calendarOpen: false,
   calendarMonth: "",
   historyScope: "today",
@@ -248,8 +251,9 @@ function renderDashboard(user) {
               <button id="headerLogoutButton" class="secondary-button danger-button mobile-only-button" type="button">Logout</button>
             </div>
           </div>
-          <div class="topbar-tools">
+          <div class="topbar-tools ${isAdmin ? "admin-tools" : ""}">
             <input id="searchInput" class="search-input" type="search" placeholder="Search by customer, phone, or user" value="${escapeHtml(state.search)}">
+            ${isAdmin ? renderTimeFilterControls() : ""}
             <div class="date-filter-shell">
               <button
                 id="dateFilterToggleButton"
@@ -697,6 +701,9 @@ function bindDashboardEvents() {
   const confirmDeleteButton = document.getElementById("confirmDeleteButton");
   const transactionForm = document.getElementById("transactionForm");
   const searchInput = document.getElementById("searchInput");
+  const timeFilterFrom = document.getElementById("timeFilterFrom");
+  const timeFilterTo = document.getElementById("timeFilterTo");
+  const clearTimeFilterButton = document.getElementById("clearTimeFilterButton");
   const dateFilterToggleButton = document.getElementById("dateFilterToggleButton");
   const dateFilterInput = document.getElementById("dateFilterInput");
   const dateFilterPopover = document.getElementById("dateFilterPopover");
@@ -849,6 +856,42 @@ function bindDashboardEvents() {
       event.stopPropagation();
     });
   }
+
+  if (timeFilterFrom) {
+    timeFilterFrom.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleTimeFilterPopover("from");
+    });
+  }
+
+  if (timeFilterTo) {
+    timeFilterTo.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleTimeFilterPopover("to");
+    });
+  }
+
+  if (clearTimeFilterButton) {
+    clearTimeFilterButton.addEventListener("click", () => {
+      state.filterTimeFrom = "";
+      state.filterTimeTo = "";
+      state.timePickerOpen = "";
+      state.currentPage = 1;
+      render();
+    });
+  }
+
+  document.querySelectorAll("[data-time-filter-popover]").forEach((popover) => {
+    popover.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+  });
+
+  document.querySelectorAll("[data-time-option]").forEach((button) => {
+    button.addEventListener("click", () => {
+      applyTimeFilter(button.dataset.timeOption, button.dataset.timeValue);
+    });
+  });
 
   if (calendarPrevButton) {
     calendarPrevButton.addEventListener("click", () => {
@@ -1446,6 +1489,81 @@ function updateProfitPreview() {
   preview.textContent = formatProfit(calculateProfit(typeInput.value, amountInput.value));
 }
 
+function renderTimeFilterControls() {
+  return `
+    <div class="time-filter-group">
+      <div class="time-filter-field">
+        <span>From</span>
+        <div class="time-filter-shell">
+          <button
+            id="timeFilterFrom"
+            class="time-filter-input time-filter-trigger ${state.timePickerOpen === "from" ? "active" : ""}"
+            type="button"
+            data-time-picker-toggle="from"
+          >
+            <span>${escapeHtml(state.filterTimeFrom || "From")}</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"></path></svg>
+          </button>
+          ${renderTimeFilterPopover("from", state.filterTimeFrom)}
+        </div>
+      </div>
+      <div class="time-filter-field">
+        <span>To</span>
+        <div class="time-filter-shell">
+          <button
+            id="timeFilterTo"
+            class="time-filter-input time-filter-trigger ${state.timePickerOpen === "to" ? "active" : ""}"
+            type="button"
+            data-time-picker-toggle="to"
+          >
+            <span>${escapeHtml(state.filterTimeTo || "To")}</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"></path></svg>
+          </button>
+          ${renderTimeFilterPopover("to", state.filterTimeTo)}
+        </div>
+      </div>
+      <button
+        id="clearTimeFilterButton"
+        class="secondary-button ghost-button time-filter-clear ${state.filterTimeFrom || state.filterTimeTo ? "" : "hidden"}"
+        type="button"
+      >
+        Clear
+      </button>
+    </div>
+  `;
+}
+
+function renderTimeFilterPopover(edge, selectedValue) {
+  return `
+    <div class="time-filter-popover ${state.timePickerOpen === edge ? "visible" : ""}" data-time-filter-popover="${edge}">
+      <div class="time-filter-options">
+        ${buildTimeFilterOptions(edge, selectedValue)}
+      </div>
+    </div>
+  `;
+}
+
+function buildTimeFilterOptions(edge, selectedValue) {
+  const options = [];
+  for (let hour = 0; hour < 24; hour += 1) {
+    for (let minute = 0; minute < 60; minute += 30) {
+      const value = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+      options.push(`
+        <button
+          class="time-option-button ${selectedValue === value ? "active" : ""}"
+          type="button"
+          data-time-option="${edge}"
+          data-time-value="${value}"
+        >
+          ${value}
+        </button>
+      `);
+    }
+  }
+
+  return options.join("");
+}
+
 function setTransactionMessage(message, text) {
   if (!message) {
     return;
@@ -1659,7 +1777,8 @@ function getVisibleTransactions() {
       const dateMatch = state.filterDate
         ? txDate === state.filterDate
         : (state.historyScope === "all" || txDate === todayPrefix);
-      return typeMatch && searchMatch && dateMatch;
+      const timeMatch = isTransactionWithinTimeFilter(tx.createdAt);
+      return typeMatch && searchMatch && dateMatch && timeMatch;
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -1783,6 +1902,59 @@ function getTransactionDate(createdAt) {
   return String(createdAt || "").slice(0, 10);
 }
 
+function getTransactionTime(createdAt) {
+  return String(createdAt || "").slice(11, 16);
+}
+
+function isTransactionWithinTimeFilter(createdAt) {
+  const txTime = getTransactionTime(createdAt);
+  if (!txTime) {
+    return !state.filterTimeFrom && !state.filterTimeTo;
+  }
+
+  if (state.filterTimeFrom && txTime < state.filterTimeFrom) {
+    return false;
+  }
+
+  if (state.filterTimeTo && txTime > state.filterTimeTo) {
+    return false;
+  }
+
+  return true;
+}
+
+function toggleTimeFilterPopover(edge) {
+  state.timePickerOpen = state.timePickerOpen === edge ? "" : edge;
+  render();
+}
+
+function closeTimeFilterPopover() {
+  if (!state.timePickerOpen) {
+    return;
+  }
+
+  state.timePickerOpen = "";
+  render();
+}
+
+function applyTimeFilter(edge, value) {
+  if (edge === "from") {
+    state.filterTimeFrom = value;
+    if (state.filterTimeTo && state.filterTimeTo < state.filterTimeFrom) {
+      state.filterTimeTo = state.filterTimeFrom;
+    }
+  } else {
+    state.filterTimeTo = value;
+    if (state.filterTimeFrom && state.filterTimeTo < state.filterTimeFrom) {
+      state.filterTimeFrom = state.filterTimeTo;
+    }
+  }
+
+  state.timePickerOpen = "";
+  state.currentPage = 1;
+  render();
+}
+
 function getDateProfitTransactions(items) {
   if (state.filterDate) {
     return items;
@@ -1815,16 +1987,20 @@ function getDatePartsInAppTimeZone() {
 }
 
 function getDateProfitLabel() {
-  if (state.filterDate) {
-    return `Profit On ${state.filterDate}`;
+  const baseLabel = state.filterDate
+    ? `Profit On ${state.filterDate}`
+    : `Profit On ${getTodayDatePrefix()}`;
+
+  if (state.filterTimeFrom || state.filterTimeTo) {
+    return `${baseLabel} ${state.filterTimeFrom || "00:00"}-${state.filterTimeTo || "23:59"}`;
   }
 
-  return `Profit On ${getTodayDatePrefix()}`;
+  return baseLabel;
 }
 
 function getClosingSummaryTransactions(items) {
   const targetDate = state.filterDate || getTodayDatePrefix();
-  return items.filter((tx) => getTransactionDate(tx.createdAt) === targetDate);
+  return items.filter((tx) => getTransactionDate(tx.createdAt) === targetDate && isTransactionWithinTimeFilter(tx.createdAt));
 }
 
 function summarizeClosingTransactions(items) {
@@ -1861,9 +2037,15 @@ function summarizeClosingTransactions(items) {
 }
 
 function getClosingSummaryLabel() {
-  return state.filterDate
+  const baseLabel = state.filterDate
     ? `Based on all transactions from ${state.filterDate}`
     : `Based on all transactions from ${getTodayDatePrefix()}`;
+
+  if (state.filterTimeFrom || state.filterTimeTo) {
+    return `${baseLabel} between ${state.filterTimeFrom || "00:00"} and ${state.filterTimeTo || "23:59"}`;
+  }
+
+  return baseLabel;
 }
 
 async function hydrateSession() {
@@ -2022,10 +2204,18 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && state.calendarOpen) {
     closeCalendarPopover();
   }
+
+  if (event.key === "Escape" && state.timePickerOpen) {
+    closeTimeFilterPopover();
+  }
 });
 
 document.addEventListener("click", () => {
   if (state.calendarOpen) {
     closeCalendarPopover();
+  }
+
+  if (state.timePickerOpen) {
+    closeTimeFilterPopover();
   }
 });
