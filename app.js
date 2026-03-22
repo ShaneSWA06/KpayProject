@@ -12,6 +12,8 @@ const state = {
   filterType: "all",
   currentPage: 1,
   modalOpen: false,
+  detailsId: "",
+  deleteConfirmId: "",
   editingId: "",
   authTab: "login",
   loading: true
@@ -333,14 +335,14 @@ function renderDashboard(user) {
             <table>
               <thead>
                 <tr>
-                  <th>Date</th>
-                  <th>Type</th>
-                  <th>Name</th>
-                  <th>Phone</th>
-                  <th>Amount</th>
-                  ${isAdmin ? "<th>Profit</th>" : ""}
-                  <th>Created By</th>
-                  <th>Action</th>
+                  <th class="column-date">Date</th>
+                  <th class="column-type">Type</th>
+                  <th class="column-name">Name</th>
+                  <th class="column-phone">Phone</th>
+                  <th class="column-amount">Amount</th>
+                  ${isAdmin ? "<th class=\"column-profit\">Profit</th>" : ""}
+                  <th class="column-created-by">Created By</th>
+                  <th class="column-action">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -402,6 +404,9 @@ function renderDashboard(user) {
           </form>
         </section>
       </div>
+
+      ${renderDetailsModal(isAdmin)}
+      ${renderDeleteConfirmModal()}
     </div>
   `;
 }
@@ -413,21 +418,70 @@ function renderTransactionRows(items, isAdmin) {
 
   return items.map((tx) => `
     <tr>
-      <td data-label="Date">${escapeHtml(tx.createdAt)}</td>
-      <td data-label="Type"><span class="type-badge ${tx.type === "ငွေထုတ်" ? "withdraw" : "deposit"}">${escapeHtml(tx.type)}</span></td>
-      <td data-label="Name">${escapeHtml(tx.customerName)}</td>
-      <td data-label="Phone">${escapeHtml(tx.phoneNumber || "-")}</td>
-      <td data-label="Amount">${formatAmount(tx.amount)}</td>
-      ${isAdmin ? `<td data-label="Profit" class="money-positive">${formatProfit(tx.profit)}</td>` : ""}
-      <td data-label="Created By">${escapeHtml(tx.createdByName)}</td>
-      <td data-label="Action">
+      <td class="column-date" data-label="Date">${escapeHtml(tx.createdAt)}</td>
+      <td class="column-type" data-label="Type"><span class="type-badge ${tx.type === "ငွေထုတ်" ? "withdraw" : "deposit"}">${escapeHtml(tx.type)}</span></td>
+      <td class="column-name" data-label="Name">${escapeHtml(tx.customerName)}</td>
+      <td class="column-phone" data-label="Phone">${escapeHtml(tx.phoneNumber || "-")}</td>
+      <td class="column-amount" data-label="Amount">${formatAmount(tx.amount)}</td>
+      ${isAdmin ? `<td class="column-profit money-positive" data-label="Profit">${formatProfit(tx.profit)}</td>` : ""}
+      <td class="column-created-by" data-label="Created By">${escapeHtml(tx.createdByName)}</td>
+      <td class="column-action" data-label="Action">
         <div class="row-actions">
-          <button class="mini-button" data-action="edit" data-id="${escapeHtml(tx.id)}" type="button">Edit</button>
-          <button class="mini-button danger" data-action="delete" data-id="${escapeHtml(tx.id)}" type="button">Delete</button>
+          <button class="icon-action-button" data-action="details" data-id="${escapeHtml(tx.id)}" type="button" aria-label="View details" title="View details">${getActionIconSvg("details")}</button>
+          <button class="icon-action-button" data-action="edit" data-id="${escapeHtml(tx.id)}" type="button" aria-label="Edit transaction" title="Edit transaction">${getActionIconSvg("edit")}</button>
+          <button class="icon-action-button danger" data-action="delete" data-id="${escapeHtml(tx.id)}" type="button" aria-label="Delete transaction" title="Delete transaction">${getActionIconSvg("delete")}</button>
         </div>
       </td>
     </tr>
   `).join("");
+}
+
+function renderDetailsModal(isAdmin) {
+  const tx = state.detailsId ? state.transactions.find((item) => item.id === state.detailsId) : null;
+  return `
+    <div class="modal-backdrop ${tx ? "visible" : ""}" id="detailsBackdrop">
+      ${tx ? getDetailsModalContent(tx, isAdmin) : ""}
+    </div>
+  `;
+}
+
+function renderDeleteConfirmModal() {
+  const tx = state.deleteConfirmId ? state.transactions.find((item) => item.id === state.deleteConfirmId) : null;
+  return `
+    <div class="modal-backdrop ${tx ? "visible" : ""}" id="deleteConfirmBackdrop">
+      ${tx ? getDeleteConfirmModalContent(tx) : ""}
+    </div>
+  `;
+}
+
+function getActionIconSvg(type) {
+  if (type === "edit") {
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 20h4l10-10-4-4L4 16v4Z"></path>
+        <path d="M13 7l4 4"></path>
+      </svg>
+    `;
+  }
+
+  if (type === "delete") {
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 6h18"></path>
+        <path d="M8 6V4h8v2"></path>
+        <path d="M19 6l-1 14H6L5 6"></path>
+        <path d="M10 11v6"></path>
+        <path d="M14 11v6"></path>
+      </svg>
+    `;
+  }
+
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path>
+      <circle cx="12" cy="12" r="3"></circle>
+    </svg>
+  `;
 }
 
 function bindEvents() {
@@ -528,6 +582,12 @@ function bindDashboardEvents() {
   const openModalButton = document.getElementById("openModalButton");
   const closeModalButton = document.getElementById("closeModalButton");
   const modalBackdrop = document.getElementById("modalBackdrop");
+  const detailsBackdrop = document.getElementById("detailsBackdrop");
+  const closeDetailsButton = document.getElementById("closeDetailsButton");
+  const deleteConfirmBackdrop = document.getElementById("deleteConfirmBackdrop");
+  const closeDeleteConfirmButton = document.getElementById("closeDeleteConfirmButton");
+  const cancelDeleteConfirmButton = document.getElementById("cancelDeleteConfirmButton");
+  const confirmDeleteButton = document.getElementById("confirmDeleteButton");
   const transactionForm = document.getElementById("transactionForm");
   const searchInput = document.getElementById("searchInput");
   const dateFilterToggleButton = document.getElementById("dateFilterToggleButton");
@@ -560,20 +620,8 @@ function bindDashboardEvents() {
       const action = button.dataset.action;
 
       if (action === "delete") {
-        const tx = state.transactions.find((item) => item.id === id);
-        const label = tx ? `${tx.customerName} (${formatAmount(tx.amount)})` : "this transaction";
-        const confirmed = window.confirm(`Are you sure you want to delete ${label}?`);
-        if (!confirmed) {
-          return;
-        }
-
-        try {
-          await api(`/api/transactions/${encodeURIComponent(id)}`, { method: "DELETE" });
-          state.transactions = state.transactions.filter((tx) => tx.id !== id);
-          render();
-        } catch (error) {
-          window.alert(error.message);
-        }
+        openDeleteConfirm(id);
+        return;
       }
 
       if (action === "edit") {
@@ -582,14 +630,11 @@ function bindDashboardEvents() {
           return;
         }
 
-        state.modalOpen = true;
-        state.editingId = tx.id;
-        render();
-        setTransactionType(tx.type);
-        document.getElementById("customerName").value = tx.customerName;
-        document.getElementById("amount").value = tx.amount;
-        document.getElementById("phoneNumber").value = tx.phoneNumber || "";
-        updateProfitPreview();
+        openEditModal(tx);
+      }
+
+      if (action === "details") {
+        openDetailsModal(id);
       }
     });
   });
@@ -618,10 +663,42 @@ function bindDashboardEvents() {
     closeModalButton.addEventListener("click", closeModal);
   }
 
+  if (closeDetailsButton) {
+    closeDetailsButton.addEventListener("click", closeDetailsModal);
+  }
+
+  if (closeDeleteConfirmButton) {
+    closeDeleteConfirmButton.addEventListener("click", closeDeleteConfirm);
+  }
+
+  if (cancelDeleteConfirmButton) {
+    cancelDeleteConfirmButton.addEventListener("click", closeDeleteConfirm);
+  }
+
+  if (confirmDeleteButton) {
+    confirmDeleteButton.addEventListener("click", confirmDeleteTransaction);
+  }
+
   if (modalBackdrop) {
     modalBackdrop.addEventListener("click", (event) => {
       if (event.target === modalBackdrop) {
         closeModal();
+      }
+    });
+  }
+
+  if (detailsBackdrop) {
+    detailsBackdrop.addEventListener("click", (event) => {
+      if (event.target === detailsBackdrop) {
+        closeDetailsModal();
+      }
+    });
+  }
+
+  if (deleteConfirmBackdrop) {
+    deleteConfirmBackdrop.addEventListener("click", (event) => {
+      if (event.target === deleteConfirmBackdrop) {
+        closeDeleteConfirm();
       }
     });
   }
@@ -861,6 +938,151 @@ function closeModal() {
   render();
 }
 
+function closeDetailsModal() {
+  state.detailsId = "";
+  const detailsBackdrop = document.getElementById("detailsBackdrop");
+  if (detailsBackdrop) {
+    detailsBackdrop.classList.remove("visible");
+    detailsBackdrop.innerHTML = "";
+  }
+}
+
+function getDetailsModalContent(tx, isAdmin) {
+  return `
+    <section class="modal-card details-card">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow dark">Transaction Details</p>
+          <h2>${escapeHtml(tx.customerName)}</h2>
+        </div>
+        <button id="closeDetailsButton" class="icon-button" type="button" aria-label="Close details">x</button>
+      </div>
+      <div class="details-grid">
+        <div class="details-item"><span>Date</span><strong>${escapeHtml(tx.createdAt)}</strong></div>
+        <div class="details-item"><span>Type</span><strong>${escapeHtml(tx.type)}</strong></div>
+        <div class="details-item"><span>Name</span><strong>${escapeHtml(tx.customerName)}</strong></div>
+        <div class="details-item"><span>Phone</span><strong>${escapeHtml(tx.phoneNumber || "-")}</strong></div>
+        <div class="details-item"><span>Amount</span><strong>${formatAmount(tx.amount)}</strong></div>
+        ${isAdmin ? `<div class="details-item"><span>Profit</span><strong class="money-positive">${formatProfit(tx.profit)}</strong></div>` : ""}
+        <div class="details-item"><span>Created By</span><strong>${escapeHtml(tx.createdByName)}</strong></div>
+      </div>
+    </section>
+  `;
+}
+
+function openDeleteConfirm(id) {
+  const tx = state.transactions.find((item) => item.id === id);
+  const deleteConfirmBackdrop = document.getElementById("deleteConfirmBackdrop");
+
+  state.deleteConfirmId = id;
+
+  if (!tx || !deleteConfirmBackdrop) {
+    render();
+    return;
+  }
+
+  deleteConfirmBackdrop.innerHTML = getDeleteConfirmModalContent(tx);
+  deleteConfirmBackdrop.classList.add("visible");
+
+  const closeButton = document.getElementById("closeDeleteConfirmButton");
+  const cancelButton = document.getElementById("cancelDeleteConfirmButton");
+  const confirmButton = document.getElementById("confirmDeleteButton");
+
+  if (closeButton) {
+    closeButton.addEventListener("click", closeDeleteConfirm);
+  }
+
+  if (cancelButton) {
+    cancelButton.addEventListener("click", closeDeleteConfirm);
+  }
+
+  if (confirmButton) {
+    confirmButton.addEventListener("click", confirmDeleteTransaction);
+  }
+
+  window.requestAnimationFrame(() => {
+    const nextConfirmButton = document.getElementById("confirmDeleteButton");
+    if (nextConfirmButton) {
+      nextConfirmButton.focus({ preventScroll: true });
+    }
+  });
+}
+
+function closeDeleteConfirm() {
+  state.deleteConfirmId = "";
+  const deleteConfirmBackdrop = document.getElementById("deleteConfirmBackdrop");
+  if (deleteConfirmBackdrop) {
+    deleteConfirmBackdrop.classList.remove("visible");
+    deleteConfirmBackdrop.innerHTML = "";
+  }
+}
+
+async function confirmDeleteTransaction() {
+  const id = state.deleteConfirmId;
+  if (!id) {
+    return;
+  }
+
+  try {
+    await api(`/api/transactions/${encodeURIComponent(id)}`, { method: "DELETE" });
+    state.transactions = state.transactions.filter((tx) => tx.id !== id);
+    state.deleteConfirmId = "";
+    state.detailsId = state.detailsId === id ? "" : state.detailsId;
+    render();
+  } catch (error) {
+    window.alert(error.message);
+  }
+}
+
+function getDeleteConfirmModalContent(tx) {
+  return `
+    <section class="modal-card confirm-card">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow dark">Delete Transaction</p>
+          <h2>Delete this transaction?</h2>
+        </div>
+        <button id="closeDeleteConfirmButton" class="icon-button" type="button" aria-label="Close delete confirmation">x</button>
+      </div>
+      <p class="confirm-copy">
+        Are you sure you want to delete <strong>${escapeHtml(tx.customerName)}</strong> for <strong>${formatAmount(tx.amount)}</strong>?
+      </p>
+      <div class="confirm-actions">
+        <button id="cancelDeleteConfirmButton" class="secondary-button" type="button">Cancel</button>
+        <button id="confirmDeleteButton" class="secondary-button danger-button" type="button">Delete</button>
+      </div>
+    </section>
+  `;
+}
+
+function openDetailsModal(id) {
+  const tx = state.transactions.find((item) => item.id === id);
+  const detailsBackdrop = document.getElementById("detailsBackdrop");
+  const user = getCurrentUser();
+
+  state.detailsId = id;
+
+  if (!tx || !detailsBackdrop) {
+    render();
+    return;
+  }
+
+  detailsBackdrop.innerHTML = getDetailsModalContent(tx, user?.role === "admin");
+  detailsBackdrop.classList.add("visible");
+
+  const closeButton = document.getElementById("closeDetailsButton");
+  if (closeButton) {
+    closeButton.addEventListener("click", closeDetailsModal);
+  }
+
+  window.requestAnimationFrame(() => {
+    const nextCloseButton = document.getElementById("closeDetailsButton");
+    if (nextCloseButton) {
+      nextCloseButton.focus({ preventScroll: true });
+    }
+  });
+}
+
 function openCreateModal() {
   state.modalOpen = true;
   state.editingId = "";
@@ -899,6 +1121,63 @@ function openCreateModal() {
   modalBackdrop.classList.add("visible");
 
   window.requestAnimationFrame(() => {
+    updateProfitPreview();
+    customerName.focus({ preventScroll: true });
+  });
+}
+
+function openEditModal(tx) {
+  state.modalOpen = true;
+  state.editingId = tx.id;
+
+  const modalBackdrop = document.getElementById("modalBackdrop");
+  const transactionId = document.getElementById("transactionId");
+  const transactionType = document.getElementById("transactionType");
+  const customerName = document.getElementById("customerName");
+  const amount = document.getElementById("amount");
+  const phoneNumber = document.getElementById("phoneNumber");
+  const heading = document.querySelector("#modalBackdrop .modal-header h2");
+  const submitButton = document.querySelector("#transactionForm button[type=\"submit\"]");
+  const message = document.getElementById("transactionMessage");
+
+  if (!modalBackdrop || !transactionType || !customerName || !amount || !phoneNumber) {
+    render();
+    window.requestAnimationFrame(() => {
+      const nextCustomerName = document.getElementById("customerName");
+      const nextAmount = document.getElementById("amount");
+      const nextPhoneNumber = document.getElementById("phoneNumber");
+
+      if (nextCustomerName && nextAmount && nextPhoneNumber) {
+        setTransactionType(tx.type);
+        nextCustomerName.value = tx.customerName;
+        nextAmount.value = tx.amount;
+        nextPhoneNumber.value = tx.phoneNumber || "";
+        updateProfitPreview();
+      }
+    });
+    return;
+  }
+
+  modalBackdrop.classList.add("visible");
+  if (transactionId) {
+    transactionId.value = tx.id;
+  }
+  transactionType.value = tx.type;
+  customerName.value = tx.customerName;
+  amount.value = tx.amount;
+  phoneNumber.value = tx.phoneNumber || "";
+  if (heading) {
+    heading.textContent = "Edit Transaction";
+  }
+  if (submitButton) {
+    submitButton.textContent = "Update Transaction";
+  }
+  if (message) {
+    message.textContent = "";
+  }
+
+  window.requestAnimationFrame(() => {
+    setTransactionType(tx.type);
     updateProfitPreview();
     customerName.focus({ preventScroll: true });
   });
