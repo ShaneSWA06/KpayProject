@@ -1068,27 +1068,33 @@ function bindDashboardEvents() {
       sourceButton.textContent = sourceButton === cameraImportButton ? "Opening camera..." : "Reading image...";
       setTransactionMessage(message, "Scanning image and creating the transaction...");
 
-      try {
-        const imagePayload = await prepareImageForUpload(file);
-        imagePayload.fallbackType = document.getElementById("transactionType")?.value || "ငွေထုတ်";
-        sourceButton.textContent = "Creating transaction...";
-        const payload = await api("/api/transactions/import-image", {
-          method: "POST",
-          body: JSON.stringify(imagePayload)
+        try {
+          const imagePayload = await prepareImageForUpload(file);
+          sourceButton.textContent = "Creating transaction...";
+          const payload = await api("/api/transactions/import-image", {
+            method: "POST",
+            body: JSON.stringify(imagePayload)
         });
 
         const importedDrafts = Array.isArray(payload.drafts)
           ? payload.drafts
           : (payload.draft ? [payload.draft] : []);
 
-        if (!importedDrafts.length) {
-          throw new Error("No transaction details were found in that image.");
-        }
+          if (!importedDrafts.length) {
+            throw new Error("No transaction details were found in that image.");
+          }
 
-        await submitTransactionForm({ draft: importedDrafts[0] });
-      } catch (error) {
-        setTransactionMessage(message, error.message);
-      } finally {
+          const importedDraft = importedDrafts[0];
+          if (!String(importedDraft.customerName || "").trim()) {
+            applyImportedDraft(importedDraft);
+            setTransactionMessage(message, "OCR found the transaction, but the name was not clear. Please fill the name and save.");
+            return;
+          }
+
+          await submitTransactionForm({ draft: importedDraft });
+        } catch (error) {
+          setTransactionMessage(message, error.message);
+        } finally {
         imageImportButton && (imageImportButton.disabled = false);
         cameraImportButton && (cameraImportButton.disabled = false);
         sourceButton.textContent = originalLabel;
@@ -1686,15 +1692,18 @@ async function prepareImageForUpload(file) {
     throw new Error("Image processing is not supported in this browser.");
   }
 
-  context.drawImage(image, 0, 0, width, height);
-  return {
-    fullImageDataUrl: canvas.toDataURL("image/jpeg", 0.82),
-    amountImageDataUrl: cropCanvasToDataUrl(canvas, 0.16, 0.27, 0.68, 0.22, 1.8),
-    detailsImageDataUrl: cropCanvasToDataUrl(canvas, 0.08, 0.48, 0.84, 0.32, 1.4),
-    nameImageDataUrl: cropCanvasToDataUrl(canvas, 0.52, 0.59, 0.36, 0.17, 2.5),
-    phoneImageDataUrl: cropCanvasToDataUrl(canvas, 0.54, 0.47, 0.34, 0.14, 2.2)
-  };
-}
+    context.drawImage(image, 0, 0, width, height);
+    return {
+      fullImageDataUrl: canvas.toDataURL("image/jpeg", 0.82),
+      amountImageDataUrl: cropCanvasToDataUrl(canvas, 0.16, 0.27, 0.68, 0.22, 1.8),
+      detailsImageDataUrl: cropCanvasToDataUrl(canvas, 0.08, 0.48, 0.84, 0.32, 1.4),
+      nameImageDataUrl: cropCanvasToDataUrl(canvas, 0.42, 0.52, 0.48, 0.24, 2.8),
+      transferNameImageDataUrl: cropCanvasToDataUrl(canvas, 0.50, 0.58, 0.38, 0.10, 3.1),
+      englishTransferRowImageDataUrl: cropCanvasToDataUrl(canvas, 0.30, 0.57, 0.58, 0.14, 3.0),
+      myanmarRecipientImageDataUrl: cropCanvasToDataUrl(canvas, 0.55, 0.56, 0.28, 0.18, 3.0),
+      phoneImageDataUrl: cropCanvasToDataUrl(canvas, 0.54, 0.47, 0.34, 0.14, 2.2)
+    };
+  }
 
 function cropCanvasToDataUrl(sourceCanvas, xRatio, yRatio, widthRatio, heightRatio, scaleFactor = 1) {
   const cropX = Math.max(0, Math.round(sourceCanvas.width * xRatio));

@@ -717,6 +717,9 @@ function normalizeImageImportPayload(body) {
   const amountImageDataUrl = String(body.amountImageDataUrl || "").trim();
   const detailsImageDataUrl = String(body.detailsImageDataUrl || "").trim();
   const nameImageDataUrl = String(body.nameImageDataUrl || "").trim();
+  const transferNameImageDataUrl = String(body.transferNameImageDataUrl || "").trim();
+  const englishTransferRowImageDataUrl = String(body.englishTransferRowImageDataUrl || "").trim();
+  const myanmarRecipientImageDataUrl = String(body.myanmarRecipientImageDataUrl || "").trim();
   const phoneImageDataUrl = String(body.phoneImageDataUrl || "").trim();
   const fallbackType = normalizeTransactionType(body.fallbackType);
 
@@ -725,6 +728,9 @@ function normalizeImageImportPayload(body) {
     amountImageDataUrl: isSupportedImageDataUrl(amountImageDataUrl) ? amountImageDataUrl : "",
     detailsImageDataUrl: isSupportedImageDataUrl(detailsImageDataUrl) ? detailsImageDataUrl : "",
     nameImageDataUrl: isSupportedImageDataUrl(nameImageDataUrl) ? nameImageDataUrl : "",
+    transferNameImageDataUrl: isSupportedImageDataUrl(transferNameImageDataUrl) ? transferNameImageDataUrl : "",
+    englishTransferRowImageDataUrl: isSupportedImageDataUrl(englishTransferRowImageDataUrl) ? englishTransferRowImageDataUrl : "",
+    myanmarRecipientImageDataUrl: isSupportedImageDataUrl(myanmarRecipientImageDataUrl) ? myanmarRecipientImageDataUrl : "",
     phoneImageDataUrl: isSupportedImageDataUrl(phoneImageDataUrl) ? phoneImageDataUrl : "",
     fallbackType
   };
@@ -733,11 +739,30 @@ function normalizeImageImportPayload(body) {
 function normalizeTransactionType(value) {
   const normalized = normalizeText(value);
 
-  if (["ငွေထုတ်", "withdraw", "cash out", "withdrawal"].includes(normalized)) {
+  if (
+    ["ငွေထုတ်", "withdraw", "cash out", "withdrawal"].includes(normalized) ||
+    normalized.includes("ငွေထုတ်") ||
+    normalized.includes("withdraw") ||
+    normalized.includes("cash out") ||
+    normalized.includes("cash-out") ||
+    normalized.includes("sent") ||
+    normalized.includes("transfer out") ||
+    normalized.includes("outgoing")
+  ) {
     return "ငွေထုတ်";
   }
 
-  if (["ငွေသွင်း", "deposit", "cash in"].includes(normalized)) {
+  if (
+    ["ငွေသွင်း", "deposit", "cash in"].includes(normalized) ||
+    normalized.includes("ငွေသွင်း") ||
+    normalized.includes("deposit") ||
+    normalized.includes("cash in") ||
+    normalized.includes("cash-in") ||
+    normalized.includes("received") ||
+    normalized.includes("receive") ||
+    normalized.includes("transfer in") ||
+    normalized.includes("incoming")
+  ) {
     return "ငွေသွင်း";
   }
 
@@ -804,21 +829,31 @@ function buildGeminiImageImportParts(imagePayload) {
   const fallbackType = normalizeTransactionType(imagePayload.fallbackType);
   const parts = [
     {
-      text: [
-        "Extract a single transaction from this payment receipt image and return JSON only.",
-        "Fields:",
-        '- "type": exactly "ငွေထုတ်", "ငွေသွင်း", or ""',
-        '- "customerName": the visible person/account name only; never include currency, IDs, or extra words',
-        '- "amount": the money amount only, as digits without sign or commas if possible',
-        '- "phoneNumber": only a real standalone phone number if visibly shown; otherwise ""',
-        "Rules:",
-        "- Ignore transaction IDs, reference numbers, and account numbers.",
-        "- The amount is the visible money amount, even if shown with a negative sign.",
-        "- Prefer the receipt text for type. Only use the fallback type if the receipt is unclear.",
-        "- If the name is unclear, return an empty string instead of guessing."
-      ].join("\n")
-    }
-  ];
+        text: [
+          "Extract a single transaction from this payment receipt image and return JSON only.",
+            "Fields:",
+            '- "type": exactly "ငွေထုတ်", "ငွေသွင်း", or ""',
+          '- "customerName": the correct person name for this app; never include currency, IDs, reference numbers, labels, or extra words',
+          '- "amount": the money amount only, as digits without sign or commas if possible',
+          '- "phoneNumber": only a real standalone phone number if visibly shown; otherwise ""',
+          "Rules:",
+          "- Ignore transaction IDs, reference numbers, and account numbers.",
+          "- The amount is the visible money amount, even if shown with a negative sign.",
+          "- Determine transaction type from the explicit receipt text/field value first, especially the transaction-type row on the detail section.",
+          "- For this app's business rule: '+' amount means 'ငွေထုတ်' and '-' amount means 'ငွေသွင်း' when you need to infer type from the sign.",
+          "- Do not decide transaction type from the minus/plus sign alone when the receipt text clearly shows a transaction type.",
+            '- If type is "ငွေထုတ်", set customerName from the sender/payor field such as "ပေးပို့သူ".',
+              '- If type is "ငွေသွင်း", set customerName from the receiver/account-name field such as "ငွေလွှဲမည်သူ" or the visible recipient name.',
+              '- For English receipts, prefer the value beside labels like "Transfer To", "Transfer From", "Receiver", "Sender", "Account Name", "To", or "From".',
+              '- If a name line includes a masked number in parentheses, keep only the person name and ignore the masked number.',
+              '- Example: if the receipt shows "Transfer To  MA BRIGIP (******9679)", return customerName as "MA BRIGIP".',
+              '- For Burmese detail receipts, the useful person name is often the lower-right value under the transaction type row. Prefer that value over nearby labels.',
+              "- Never use product descriptions, labels, service names, or merchant text as customerName.",
+              "- Only use the fallback type if the receipt text is genuinely unclear or missing.",
+              "- If the name is unclear, return an empty string instead of guessing."
+            ].join("\n")
+          }
+    ];
 
   if (fallbackType) {
     parts.push({ text: `Fallback transaction type if the receipt is unclear: ${fallbackType}` });
@@ -842,6 +877,21 @@ function buildGeminiImageImportParts(imagePayload) {
   if (imagePayload.nameImageDataUrl) {
     parts.push({ text: "Name crop:" });
     parts.push(makeGeminiInlineDataPart(imagePayload.nameImageDataUrl));
+  }
+
+  if (imagePayload.transferNameImageDataUrl) {
+    parts.push({ text: "Focused transfer-name value crop (for labels like Transfer To / Transfer From / Receiver / Sender):" });
+    parts.push(makeGeminiInlineDataPart(imagePayload.transferNameImageDataUrl));
+  }
+
+  if (imagePayload.englishTransferRowImageDataUrl) {
+    parts.push({ text: "English transfer row crop (label and value together, such as Transfer To + person name):" });
+    parts.push(makeGeminiInlineDataPart(imagePayload.englishTransferRowImageDataUrl));
+  }
+
+  if (imagePayload.myanmarRecipientImageDataUrl) {
+    parts.push({ text: "Myanmar receipt name-value crop from the lower-right detail area:" });
+    parts.push(makeGeminiInlineDataPart(imagePayload.myanmarRecipientImageDataUrl));
   }
 
   if (imagePayload.phoneImageDataUrl) {
@@ -885,7 +935,8 @@ function parseGeminiImageImport(text, fallbackType = "") {
     return null;
   }
 
-  const type = normalizeTransactionType(raw.type) || normalizeTransactionType(fallbackType);
+  const detectedType = normalizeTransactionType(raw.type);
+  const type = detectedType || normalizeTransactionType(fallbackType);
   const amount = toNumber(raw.amount);
   const customerName = sanitizeDetectedName(raw.customerName || "");
   const phoneNumber = extractPhoneFromText(raw.phoneNumber || "");
@@ -1141,11 +1192,11 @@ function detectTransactionType(text) {
 
 function inferTransactionTypeFromSign(sign) {
   if (sign === "-") {
-    return "ငွေထုတ်";
+    return "ငွေသွင်း";
   }
 
   if (sign === "+") {
-    return "ငွေသွင်း";
+    return "ငွေထုတ်";
   }
 
   return "";
@@ -1308,11 +1359,12 @@ function sanitizeDetectedName(value) {
 
 function sanitizeDetectedNameLine(value) {
   let line = String(value || "")
-    .replace(/[+-]?\s*\d[\d,]*(?:\.\d{1,2})?/g, " ")
-    .replace(/\b(?:ks|kyat|mmk)\b/gi, " ")
-    .replace(/[|:;~_=]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+      .replace(/[+-]?\s*\d[\d,]*(?:\.\d{1,2})?/g, " ")
+      .replace(/\b(?:ks|kyat|mmk)\b/gi, " ")
+      .replace(/\(\s*[*xX\d-]{3,}\s*\)/g, " ")
+      .replace(/[|:;~_=]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
 
   if (!line) {
     return "";
@@ -1334,7 +1386,7 @@ function sanitizeDetectedNameLine(value) {
     line = line.replace(/\s+[A-Za-z]$/, "").trim();
   }
 
-  return repairLikelyMyanmarLatinName(line);
+  return normalizeLikelyPersonName(repairLikelyMyanmarLatinName(line));
 }
 
 function detectLatinStyleName(text) {
@@ -1361,6 +1413,30 @@ function repairLikelyMyanmarLatinName(value) {
   return tokens.join(" ");
 }
 
+function normalizeLikelyPersonName(value) {
+  const text = String(value || "").trim();
+  if (!text) {
+    return "";
+  }
+
+  if (!/^[A-Za-z\s.'-]+$/.test(text)) {
+    return text;
+  }
+
+  const tokens = text.split(/\s+/).filter(Boolean);
+  if (!tokens.length) {
+    return "";
+  }
+
+  return tokens.map((token) => {
+    if (token === token.toUpperCase() || token === token.toLowerCase()) {
+      return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+    }
+
+    return token;
+  }).join(" ");
+}
+
 function scoreNameCandidate(value) {
   const tokens = String(value || "").trim().split(/\s+/).filter(Boolean);
   if (!tokens.length) {
@@ -1385,12 +1461,12 @@ function scoreNameCandidate(value) {
     }
 
     if (/^[A-Z]{3,}$/.test(token)) {
-      score -= 4;
+      score += 2;
       continue;
     }
 
     if (/^[a-z]{2,}$/.test(token)) {
-      score -= 3;
+      score += 1;
       continue;
     }
 
@@ -1398,7 +1474,7 @@ function scoreNameCandidate(value) {
   }
 
   if (/^[a-z]/.test(tokens[0])) {
-    score -= 3;
+    score -= 1;
   }
 
   if (tokens.some((token) => token.length === 1)) {
