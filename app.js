@@ -14,6 +14,9 @@ const state = {
   filterDate: "",
   filterTimeFrom: "",
   filterTimeTo: "",
+  pendingFilterTimeFrom: "",
+  pendingFilterTimeTo: "",
+  timeFilterDraftActive: false,
   timePickerOpen: "",
   calendarOpen: false,
   calendarMonth: "",
@@ -201,41 +204,31 @@ function renderDashboard(user) {
   const isAdmin = user.role === "admin";
 
   return `
-    <div class="dashboard-shell">
-      <aside class="sidebar">
-        <div class="sidebar-brand">
+    <div class="dashboard-shell navbar-layout">
+      <header class="dashboard-navbar">
+        <div class="navbar-brand">
           <div class="brand-badge">W</div>
           <div>
             <h2>Wallet Counter Pro</h2>
             <p>KBZPay / WavePay counter team</p>
           </div>
         </div>
-
-        <div class="profile-card">
-          <span class="profile-role">${escapeHtml(user.role)}</span>
-          <strong>${escapeHtml(user.fullName)}</strong>
-          <small>@${escapeHtml(user.username)}</small>
-        </div>
-
-        ${isAdmin ? `
-          <div class="menu-card">
-            <h3>Transaction Rules</h3>
-            <ul class="rule-list">
-              <li><strong>ငွေထုတ်</strong> under 100,000 MMK = 1% profit</li>
-              <li><strong>ငွေထုတ်</strong> 100,000 MMK and above = 0.5% profit</li>
-              <li><strong>ငွေသွင်း</strong> = 0.1% profit</li>
-            </ul>
+        <div class="navbar-meta">
+          <div class="navbar-profile">
+            <span class="profile-role">${escapeHtml(user.role)}</span>
+            <div>
+              <strong>${escapeHtml(user.fullName)}</strong>
+              <small>@${escapeHtml(user.username)}</small>
+            </div>
           </div>
-        ` : ""}
-
-        <div class="menu-card">
-          <h3>Quick Filter</h3>
-          <button class="filter-chip ${state.filterType === "all" ? "active" : ""}" data-filter="all" type="button">All</button>
-          <button class="filter-chip ${state.filterType === "ငွေထုတ်" ? "active" : ""}" data-filter="ငွေထုတ်" type="button">ငွေထုတ်</button>
-          <button class="filter-chip ${state.filterType === "ငွေသွင်း" ? "active" : ""}" data-filter="ငွေသွင်း" type="button">ငွေသွင်း</button>
+          <div class="navbar-actions">
+            <button id="themeToggleDashboard" class="theme-toggle-button icon-only" type="button" aria-label="${getThemeLabel()}" title="${getThemeLabel()}">
+              <span class="theme-toggle-icon">${getThemeIconSvg()}</span>
+            </button>
+            <button id="headerLogoutButton" class="secondary-button danger-button" type="button">Logout</button>
+          </div>
         </div>
-
-      </aside>
+      </header>
 
       <main class="content">
         <header class="topbar">
@@ -243,12 +236,6 @@ function renderDashboard(user) {
             <div class="topbar-heading">
               <p class="eyebrow dark">Operations Dashboard</p>
               <h1>Daily Transactions</h1>
-            </div>
-            <div class="topbar-actions">
-              <button id="themeToggleDashboard" class="theme-toggle-button icon-only" type="button" aria-label="${getThemeLabel()}" title="${getThemeLabel()}">
-                <span class="theme-toggle-icon">${getThemeIconSvg()}</span>
-              </button>
-              <button id="headerLogoutButton" class="secondary-button danger-button mobile-only-button" type="button">Logout</button>
             </div>
           </div>
           <div class="topbar-tools ${isAdmin ? "admin-tools" : ""}">
@@ -307,35 +294,6 @@ function renderDashboard(user) {
               <strong>Admin Only</strong>
             </article>
           `}
-        </section>
-
-        <section class="panel compact-panel closing-summary-section">
-          <div class="section-heading">
-            <h2>Daily Closing Summary</h2>
-            <p>${escapeHtml(closingSummaryLabel)}</p>
-          </div>
-          <div class="closing-summary-grid">
-            <article class="stat-card">
-              <span>Opening Count</span>
-              <strong>${closingSummary.openingCount}</strong>
-            </article>
-            <article class="stat-card">
-              <span>Total Deposit</span>
-              <strong>${formatAmount(closingSummary.totalDeposit)}</strong>
-            </article>
-            <article class="stat-card">
-              <span>Total Withdraw</span>
-              <strong>${formatAmount(closingSummary.totalWithdraw)}</strong>
-            </article>
-            <article class="stat-card accent">
-              <span>Total Profit</span>
-              <strong>${isAdmin ? formatProfit(closingSummary.totalProfit) : "Admin Only"}</strong>
-            </article>
-            <article class="stat-card">
-              <span>Cashier Count</span>
-              <strong>${closingSummary.cashierCount}</strong>
-            </article>
-          </div>
         </section>
 
         ${isAdmin ? `
@@ -545,7 +503,7 @@ function renderDateFilterPopover() {
         </button>
         <div class="date-popover-title">
           <span>Date Filter</span>
-          <strong>${escapeHtml(label)}</strong>
+            <strong id="datePopoverLabel">${escapeHtml(label)}</strong>
         </div>
         <button id="calendarNextButton" class="icon-button date-nav-button" type="button" aria-label="Next month">
           ${getPaginationArrowSvg("right")}
@@ -554,9 +512,9 @@ function renderDateFilterPopover() {
       <div class="date-weekdays">
         <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
       </div>
-      <div class="date-grid">
-        ${buildCalendarDayButtons(viewYear, viewMonth)}
-      </div>
+        <div class="date-grid" id="dateGrid">
+          ${buildCalendarDayButtons(viewYear, viewMonth)}
+        </div>
       <div class="date-popover-actions">
         <button id="calendarClearButton" class="secondary-button ghost-button" type="button">Clear</button>
         <button id="calendarTodayButton" class="secondary-button" type="button">Today</button>
@@ -871,15 +829,18 @@ function bindDashboardEvents() {
     });
   }
 
-  if (clearTimeFilterButton) {
-    clearTimeFilterButton.addEventListener("click", () => {
-      state.filterTimeFrom = "";
-      state.filterTimeTo = "";
-      state.timePickerOpen = "";
-      state.currentPage = 1;
-      render();
-    });
-  }
+    if (clearTimeFilterButton) {
+      clearTimeFilterButton.addEventListener("click", () => {
+        state.filterTimeFrom = "";
+        state.filterTimeTo = "";
+        state.pendingFilterTimeFrom = "";
+        state.pendingFilterTimeTo = "";
+        state.timeFilterDraftActive = false;
+        state.timePickerOpen = "";
+        state.currentPage = 1;
+        render();
+      });
+    }
 
   document.querySelectorAll("[data-time-filter-popover]").forEach((popover) => {
     popover.addEventListener("click", (event) => {
@@ -896,14 +857,14 @@ function bindDashboardEvents() {
   if (calendarPrevButton) {
     calendarPrevButton.addEventListener("click", () => {
       state.calendarMonth = shiftCalendarMonth(-1);
-      render();
+      syncCalendarControls();
     });
   }
 
   if (calendarNextButton) {
     calendarNextButton.addEventListener("click", () => {
       state.calendarMonth = shiftCalendarMonth(1);
-      render();
+      syncCalendarControls();
     });
   }
 
@@ -1124,7 +1085,7 @@ function toggleCalendarPopover() {
   if (state.calendarOpen) {
     syncCalendarMonth();
   }
-  render();
+  syncCalendarControls();
 }
 
 function closeCalendarPopover() {
@@ -1132,7 +1093,7 @@ function closeCalendarPopover() {
     return;
   }
   state.calendarOpen = false;
-  render();
+  syncCalendarControls();
 }
 
 function closeDetailsModal() {
@@ -1496,46 +1457,49 @@ function updateProfitPreview() {
 }
 
 function renderTimeFilterControls() {
+  const displayedFrom = getDisplayedTimeFilterValue("from");
+  const displayedTo = getDisplayedTimeFilterValue("to");
+  const hasAnyTimeFilter = state.filterTimeFrom || state.filterTimeTo || state.pendingFilterTimeFrom || state.pendingFilterTimeTo;
   return `
-    <div class="time-filter-group">
-      <div class="time-filter-field">
-        <span>From</span>
-        <div class="time-filter-shell">
+      <div class="time-filter-group">
+        <div class="time-filter-field">
+          <span>From</span>
+          <div class="time-filter-shell">
           <button
-            id="timeFilterFrom"
-            class="time-filter-input time-filter-trigger ${state.timePickerOpen === "from" ? "active" : ""}"
-            type="button"
-            data-time-picker-toggle="from"
-          >
-            <span>${escapeHtml(state.filterTimeFrom || "From")}</span>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"></path></svg>
-          </button>
-          ${renderTimeFilterPopover("from", state.filterTimeFrom)}
+              id="timeFilterFrom"
+              class="time-filter-input time-filter-trigger ${state.timePickerOpen === "from" ? "active" : ""}"
+              type="button"
+              data-time-picker-toggle="from"
+            >
+              <span>${escapeHtml(displayedFrom || "From")}</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"></path></svg>
+            </button>
+            ${renderTimeFilterPopover("from", displayedFrom)}
+          </div>
         </div>
-      </div>
-      <div class="time-filter-field">
-        <span>To</span>
-        <div class="time-filter-shell">
+        <div class="time-filter-field">
+          <span>To</span>
+          <div class="time-filter-shell">
           <button
-            id="timeFilterTo"
-            class="time-filter-input time-filter-trigger ${state.timePickerOpen === "to" ? "active" : ""}"
-            type="button"
-            data-time-picker-toggle="to"
-          >
-            <span>${escapeHtml(state.filterTimeTo || "To")}</span>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"></path></svg>
-          </button>
-          ${renderTimeFilterPopover("to", state.filterTimeTo)}
+              id="timeFilterTo"
+              class="time-filter-input time-filter-trigger ${state.timePickerOpen === "to" ? "active" : ""}"
+              type="button"
+              data-time-picker-toggle="to"
+            >
+              <span>${escapeHtml(displayedTo || "To")}</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"></path></svg>
+            </button>
+            ${renderTimeFilterPopover("to", displayedTo)}
+          </div>
         </div>
+        <button
+          id="clearTimeFilterButton"
+          class="secondary-button ghost-button time-filter-clear ${hasAnyTimeFilter ? "" : "hidden"}"
+          type="button"
+        >
+          Clear
+        </button>
       </div>
-      <button
-        id="clearTimeFilterButton"
-        class="secondary-button ghost-button time-filter-clear ${state.filterTimeFrom || state.filterTimeTo ? "" : "hidden"}"
-        type="button"
-      >
-        Clear
-      </button>
-    </div>
   `;
 }
 
@@ -1568,6 +1532,101 @@ function buildTimeFilterOptions(edge, selectedValue) {
   }
 
   return options.join("");
+}
+
+function getDisplayedTimeFilterValue(edge) {
+  if (edge === "from") {
+    return state.pendingFilterTimeFrom || state.filterTimeFrom;
+  }
+
+  return state.pendingFilterTimeTo || state.filterTimeTo;
+}
+
+function syncCalendarControls() {
+  const toggleButton = document.getElementById("dateFilterToggleButton");
+  const hiddenInput = document.getElementById("dateFilterInput");
+  const popover = document.getElementById("dateFilterPopover");
+  const label = document.getElementById("datePopoverLabel");
+  const grid = document.getElementById("dateGrid");
+
+  if (toggleButton) {
+    toggleButton.classList.toggle("active", Boolean(state.filterDate));
+    const ariaLabel = state.filterDate ? `Change date filter from ${state.filterDate}` : "Open date filter";
+    const title = state.filterDate ? `Date filter: ${state.filterDate}` : "Filter by date";
+    toggleButton.setAttribute("aria-label", ariaLabel);
+    toggleButton.setAttribute("title", title);
+  }
+
+  if (hiddenInput) {
+    hiddenInput.value = state.filterDate;
+  }
+
+  if (popover) {
+    popover.classList.toggle("visible", state.calendarOpen);
+  }
+
+  const viewDate = getCalendarViewDate();
+  if (label) {
+    label.textContent = viewDate.toLocaleString("en-US", {
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC"
+    });
+  }
+
+  if (grid) {
+    grid.innerHTML = buildCalendarDayButtons(viewDate.getUTCFullYear(), viewDate.getUTCMonth());
+    grid.querySelectorAll("[data-calendar-date]").forEach((button) => {
+      button.addEventListener("click", () => {
+        applyDateFilter(button.dataset.calendarDate);
+      });
+    });
+  }
+}
+
+function syncTimeFilterControls() {
+  const fromButton = document.getElementById("timeFilterFrom");
+  const toButton = document.getElementById("timeFilterTo");
+  const clearButton = document.getElementById("clearTimeFilterButton");
+  const fromPopover = document.querySelector('[data-time-filter-popover="from"]');
+  const toPopover = document.querySelector('[data-time-filter-popover="to"]');
+
+  if (fromButton) {
+    fromButton.classList.toggle("active", state.timePickerOpen === "from");
+    const label = fromButton.querySelector("span");
+    if (label) {
+      label.textContent = getDisplayedTimeFilterValue("from") || "From";
+    }
+  }
+
+  if (toButton) {
+    toButton.classList.toggle("active", state.timePickerOpen === "to");
+    const label = toButton.querySelector("span");
+    if (label) {
+      label.textContent = getDisplayedTimeFilterValue("to") || "To";
+    }
+  }
+
+  if (fromPopover) {
+    fromPopover.classList.toggle("visible", state.timePickerOpen === "from");
+  }
+
+  if (toPopover) {
+    toPopover.classList.toggle("visible", state.timePickerOpen === "to");
+  }
+
+  if (clearButton) {
+    const hasAnyTimeFilter = state.filterTimeFrom || state.filterTimeTo || state.pendingFilterTimeFrom || state.pendingFilterTimeTo;
+    clearButton.classList.toggle("hidden", !hasAnyTimeFilter);
+  }
+
+  document.querySelectorAll('[data-time-option="from"]').forEach((button) => {
+    button.classList.toggle("active", button.dataset.timeValue === getDisplayedTimeFilterValue("from"));
+  });
+
+  document.querySelectorAll('[data-time-option="to"]').forEach((button) => {
+    button.classList.toggle("active", button.dataset.timeValue === getDisplayedTimeFilterValue("to"));
+  });
 }
 
 function setTransactionMessage(message, text) {
@@ -1934,7 +1993,7 @@ function isTransactionWithinTimeFilter(createdAt) {
 
 function toggleTimeFilterPopover(edge) {
   state.timePickerOpen = state.timePickerOpen === edge ? "" : edge;
-  render();
+  syncTimeFilterControls();
 }
 
 function closeTimeFilterPopover() {
@@ -1943,22 +2002,37 @@ function closeTimeFilterPopover() {
   }
 
   state.timePickerOpen = "";
-  render();
+  syncTimeFilterControls();
 }
 
 function applyTimeFilter(edge, value) {
-  if (edge === "from") {
-    state.filterTimeFrom = value;
-    if (state.filterTimeTo && state.filterTimeTo < state.filterTimeFrom) {
-      state.filterTimeTo = state.filterTimeFrom;
-    }
+  if (!state.timeFilterDraftActive) {
+    state.timeFilterDraftActive = true;
+    state.pendingFilterTimeFrom = edge === "from" ? value : "";
+    state.pendingFilterTimeTo = edge === "to" ? value : "";
+  } else if (edge === "from") {
+    state.pendingFilterTimeFrom = value;
   } else {
-    state.filterTimeTo = value;
-    if (state.filterTimeFrom && state.filterTimeTo < state.filterTimeFrom) {
-      state.filterTimeFrom = state.filterTimeTo;
-    }
+    state.pendingFilterTimeTo = value;
   }
 
+  if (!state.pendingFilterTimeFrom || !state.pendingFilterTimeTo) {
+    state.timePickerOpen = edge === "from" ? "to" : "from";
+    syncTimeFilterControls();
+    return;
+  }
+
+  let nextFrom = state.pendingFilterTimeFrom;
+  let nextTo = state.pendingFilterTimeTo;
+  if (nextTo < nextFrom) {
+    [nextFrom, nextTo] = [nextTo, nextFrom];
+  }
+
+  state.filterTimeFrom = nextFrom;
+  state.filterTimeTo = nextTo;
+  state.pendingFilterTimeFrom = "";
+  state.pendingFilterTimeTo = "";
+  state.timeFilterDraftActive = false;
   state.timePickerOpen = "";
   state.currentPage = 1;
   render();

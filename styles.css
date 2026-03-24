@@ -369,6 +369,14 @@ body[data-theme="dark"] .hero-points div {
 .theme-toggle-button.icon-only {
   width: 42px;
   height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+
+.theme-toggle-button.icon-only .theme-toggle-icon {
+  margin: 0;
 }
 
 body.theme-switching .theme-toggle-icon {
@@ -424,40 +432,49 @@ body.theme-switching .theme-toggle-icon svg {
   max-width: 1440px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 280px 1fr;
   gap: 20px;
   padding: 20px;
 }
 
-.sidebar {
+.dashboard-navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 22px;
+  border: 1px solid var(--border);
   border-radius: 24px;
-  padding: 18px;
-  align-self: start;
-  position: sticky;
-  top: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
   animation: fadeUp 0.4s ease-out;
 }
 
-.sidebar-brand {
+.navbar-brand {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 18px;
 }
 
-.sidebar-brand h2 {
+.navbar-brand h2 {
   margin: 0;
   font-size: 18px;
 }
 
-.sidebar-brand p {
+.navbar-brand p {
   margin: 3px 0 0;
   color: var(--muted);
   font-size: 12px;
 }
 
-.profile-card,
-.menu-card,
+.navbar-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  flex-wrap: nowrap;
+}
+
+.navbar-profile,
 .panel,
 .stat-card,
 .type-card {
@@ -465,11 +482,19 @@ body.theme-switching .theme-toggle-icon svg {
   border: 1px solid var(--border);
 }
 
-.profile-card,
-.menu-card {
-  padding: 14px;
+.navbar-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 10px 14px;
   border-radius: 18px;
-  margin-bottom: 14px;
+}
+
+.navbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .profile-role {
@@ -485,19 +510,14 @@ body.theme-switching .theme-toggle-icon svg {
   letter-spacing: 0.05em;
 }
 
-.profile-card strong,
-.profile-card small {
+.navbar-profile strong,
+.navbar-profile small {
   display: block;
 }
 
-.profile-card small {
+.navbar-profile small {
   margin-top: 4px;
   color: var(--muted);
-}
-
-.menu-card h3 {
-  margin: 0 0 10px;
-  font-size: 15px;
 }
 
 .rule-list {
@@ -1441,10 +1461,6 @@ code {
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .sidebar {
-    position: static;
-  }
 }
 
 @media (max-width: 1440px) {
@@ -1463,7 +1479,7 @@ code {
 
   .auth-hero,
   .auth-card,
-  .sidebar,
+  .dashboard-navbar,
   .panel {
     padding: 14px;
     border-radius: 16px;
@@ -1532,22 +1548,44 @@ code {
     padding-bottom: 84px;
   }
 
-  .sidebar {
-    display: none;
+  .dashboard-navbar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
   }
 
-  .profile-card,
-  .menu-card,
+  .navbar-meta {
+    justify-content: flex-end;
+  }
+
+  .navbar-profile,
   .panel,
   .stat-card,
   .type-card {
     border-radius: 16px;
   }
 
-  .profile-card,
-  .menu-card {
-    margin-bottom: 10px;
+  .navbar-profile {
     padding: 12px;
+  }
+
+  .navbar-brand p,
+  .navbar-profile,
+  .rules-panel,
+  .closing-summary-section,
+  .dashboard-stats-section .stat-card:not(:first-child) {
+    display: none;
+  }
+
+  .navbar-brand h2 {
+    font-size: 16px;
+  }
+
+  .brand-badge {
+    min-width: 40px;
+    height: 40px;
   }
 
   .topbar,
@@ -1573,6 +1611,7 @@ code {
   .topbar-actions {
     flex: 0 0 auto;
     gap: 8px;
+    align-items: center;
   }
 
   .topbar-tools {
@@ -1602,7 +1641,16 @@ code {
   }
 
   .profit-summary-section {
-    order: 5;
+    display: block;
+    order: 4;
+  }
+
+  .profit-summary-section .section-heading p {
+    display: none;
+  }
+
+  .profit-summary-section .type-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .search-input {
@@ -1628,17 +1676,11 @@ code {
 
   .topbar-tools.admin-tools {
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "search date-toggle"
-      "time time";
+    grid-template-areas: "search date-toggle";
   }
 
   .time-filter-group {
-    grid-area: time;
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
-    align-items: end;
+    display: none;
   }
 
   .time-filter-input {
@@ -1653,10 +1695,18 @@ code {
   }
 
   .mobile-only-button {
-    width: auto;
-    min-width: 110px;
+    height: 52px;
+    padding: 0 22px;
+    min-width: 102px;
     flex: 0 0 auto;
     justify-content: center;
+    border-radius: 18px;
+  }
+
+  .topbar-actions .theme-toggle-button.icon-only {
+    width: 52px;
+    height: 52px;
+    border-radius: 18px;
   }
 
   .table-toolbar {
