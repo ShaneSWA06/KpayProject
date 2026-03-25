@@ -284,12 +284,12 @@ function renderDashboard(user) {
             <strong>${isAdmin ? formatProfit(dateProfitSummary.profit) : "Admin Only"}</strong>
           </article>
           ${isAdmin ? `
-            <article class="stat-card accent">
+            <article class="stat-card accent total-profit-card">
               <span>Total Profit</span>
               <strong>${formatProfit(summary.profit)}</strong>
             </article>
           ` : `
-            <article class="stat-card restricted">
+            <article class="stat-card restricted total-profit-card">
               <span>Total Profit</span>
               <strong>Admin Only</strong>
             </article>

@@ -1575,7 +1575,7 @@ code {
   .navbar-profile,
   .rules-panel,
   .closing-summary-section,
-  .dashboard-stats-section .stat-card:not(:first-child) {
+  .dashboard-stats-section .stat-card:not(:first-child):not(.total-profit-card) {
     display: none;
   }
 
