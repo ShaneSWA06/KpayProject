@@ -1108,6 +1108,25 @@ tbody tr:hover {
   color: var(--success);
 }
 
+.transaction-name-stack {
+  display: grid;
+  gap: 6px;
+}
+
+.duplicate-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(178, 79, 56, 0.14);
+  color: var(--danger);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
 .money-positive {
   color: var(--success);
   font-weight: 800;
@@ -1183,6 +1202,10 @@ tbody tr:hover {
 .details-item strong {
   margin-top: 6px;
   font-size: 18px;
+}
+
+.details-item strong.duplicate-text {
+  color: var(--danger);
 }
 
 .confirm-card {

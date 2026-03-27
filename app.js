@@ -33,6 +33,10 @@ const state = {
 };
 
 const app = document.getElementById("app");
+const duplicateIndexCache = {
+  transactions: null,
+  counts: new Map()
+};
 
 function loadTheme() {
   try {
@@ -330,6 +334,7 @@ function renderDashboard(user) {
                 <button id="tableFilterAll" class="mini-button ${state.filterType === "all" ? "active-filter" : ""}" type="button">All</button>
                 <button id="tableFilterWithdraw" class="mini-button ${state.filterType === "ငွေထုတ်" ? "active-filter" : ""}" type="button">ငွေထုတ်</button>
                 <button id="tableFilterDeposit" class="mini-button ${state.filterType === "ငွေသွင်း" ? "active-filter" : ""}" type="button">ငွေသွင်း</button>
+                ${isAdmin ? `<button id="tableFilterDuplicated" class="mini-button ${state.filterType === "duplicated" ? "active-filter" : ""}" type="button">Duplicated</button>` : ""}
               </div>
             </div>
             <div class="pagination-actions">
@@ -443,7 +448,9 @@ function renderTransactionRows(items, isAdmin) {
     <tr>
       <td class="column-date" data-label="Date">${escapeHtml(tx.createdAt)}</td>
       <td class="column-type" data-label="Type"><span class="type-badge ${tx.type === "ငွေထုတ်" ? "withdraw" : "deposit"}">${escapeHtml(tx.type)}</span></td>
-      <td class="column-name" data-label="Name">${escapeHtml(tx.customerName)}</td>
+      <td class="column-name" data-label="Name">
+        ${renderTransactionNameCell(tx, isAdmin)}
+      </td>
       <td class="column-phone" data-label="Phone">${escapeHtml(tx.phoneNumber || "-")}</td>
       <td class="column-amount" data-label="Amount">${formatAmount(tx.amount)}</td>
       ${isAdmin ? `<td class="column-profit money-positive" data-label="Profit">${formatProfit(tx.profit)}</td>` : ""}
@@ -680,6 +687,7 @@ function bindDashboardEvents() {
   const tableFilterAll = document.getElementById("tableFilterAll");
   const tableFilterWithdraw = document.getElementById("tableFilterWithdraw");
   const tableFilterDeposit = document.getElementById("tableFilterDeposit");
+  const tableFilterDuplicated = document.getElementById("tableFilterDuplicated");
   const tableScopeToday = document.getElementById("tableScopeToday");
   const tableScopeAllDates = document.getElementById("tableScopeAllDates");
   const paginationPrevButton = document.getElementById("paginationPrevButton");
@@ -928,6 +936,14 @@ function bindDashboardEvents() {
     });
   }
 
+  if (tableFilterDuplicated) {
+    tableFilterDuplicated.addEventListener("click", () => {
+      state.filterType = "duplicated";
+      state.currentPage = 1;
+      render();
+    });
+  }
+
   if (paginationPrevButton) {
     paginationPrevButton.addEventListener("click", () => {
       state.currentPage = Math.max(1, state.currentPage - 1);
@@ -1106,6 +1122,7 @@ function closeDetailsModal() {
 }
 
 function getDetailsModalContent(tx, isAdmin) {
+  const duplicateInfo = isAdmin ? getTransactionDuplicateInfo(tx) : null;
   return `
     <section class="modal-card details-card">
       <div class="modal-header">
@@ -1122,6 +1139,12 @@ function getDetailsModalContent(tx, isAdmin) {
         <div class="details-item"><span>Phone</span><strong>${escapeHtml(tx.phoneNumber || "-")}</strong></div>
         <div class="details-item"><span>Amount</span><strong>${formatAmount(tx.amount)}</strong></div>
         ${isAdmin ? `<div class="details-item"><span>Profit</span><strong class="money-positive">${formatProfit(tx.profit)}</strong></div>` : ""}
+        ${isAdmin ? `
+          <div class="details-item">
+            <span>Duplicate Status</span>
+            <strong class="${duplicateInfo ? "duplicate-text" : ""}">${duplicateInfo ? `Duplicate x${duplicateInfo.count}` : "No duplicate match"}</strong>
+          </div>
+        ` : ""}
         <div class="details-item"><span>Created By</span><strong>${escapeHtml(tx.createdByName)}</strong></div>
       </div>
     </section>
@@ -1265,7 +1288,10 @@ function getDeleteConfirmModalContent(tx) {
 
 function getDuplicateConfirmModalContent(pendingDuplicate) {
   const duplicate = pendingDuplicate.duplicate;
-  const duplicateBasis = "same name and amount";
+  const hasPhoneNumber = normalizePhoneNumber(pendingDuplicate.payload?.phoneNumber || duplicate.phoneNumber);
+  const duplicateBasis = hasPhoneNumber
+    ? "same name, phone number, and amount"
+    : "same name, amount, and no phone number";
   return `
     <section class="modal-card confirm-card">
       <div class="modal-header">
@@ -1276,7 +1302,7 @@ function getDuplicateConfirmModalContent(pendingDuplicate) {
         <button id="closeDuplicateConfirmButton" class="icon-button" type="button" aria-label="Close duplicate warning">${getCloseIconSvg()}</button>
       </div>
       <p class="confirm-copy">
-        A transaction with the ${duplicateBasis} was already saved at <strong>${escapeHtml(duplicate.createdAt)}</strong>.
+        A transaction with the ${duplicateBasis} was already saved earlier on <strong>${escapeHtml(getTransactionDate(duplicate.createdAt))}</strong> at <strong>${escapeHtml(getTransactionTime(duplicate.createdAt))}</strong>.
       </p>
       <div class="details-grid confirm-match-card">
         <div class="details-item"><span>Name</span><strong>${escapeHtml(duplicate.customerName)}</strong></div>
@@ -1715,7 +1741,7 @@ async function submitTransactionForm({ allowDuplicate = false, draft = null } = 
         tx.id === payload.transaction.id ? payload.transaction : tx
       ));
     } else {
-      state.transactions.unshift(payload.transaction);
+      state.transactions = [payload.transaction, ...state.transactions];
       state.currentPage = 1;
     }
 
@@ -1838,7 +1864,9 @@ function getVisibleTransactions() {
   const todayPrefix = getTodayDatePrefix();
   return state.transactions
     .filter((tx) => {
-      const typeMatch = state.filterType === "all" || tx.type === state.filterType;
+      const typeMatch = state.filterType === "duplicated"
+        ? Boolean(getTransactionDuplicateInfo(tx))
+        : (state.filterType === "all" || tx.type === state.filterType);
       const haystack = normalizeText(`${tx.customerName} ${tx.phoneNumber} ${tx.type} ${tx.createdByName}`);
       const searchMatch = !state.search || haystack.includes(normalizeText(state.search));
       const txDate = getTransactionDate(tx.createdAt);
@@ -2246,6 +2274,59 @@ function escapeHtml(value) {
 
 function normalizeText(value) {
   return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function normalizePhoneNumber(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function getTransactionDuplicateKey(tx) {
+  return [
+    getTransactionDate(tx.createdAt),
+    normalizeText(tx.customerName),
+    normalizePhoneNumber(tx.phoneNumber),
+    Number(tx.amount) || 0
+  ].join("|");
+}
+
+function getDuplicateTransactionCounts() {
+  if (duplicateIndexCache.transactions === state.transactions) {
+    return duplicateIndexCache.counts;
+  }
+
+  const counts = new Map();
+  state.transactions.forEach((tx) => {
+    const key = getTransactionDuplicateKey(tx);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+
+  duplicateIndexCache.transactions = state.transactions;
+  duplicateIndexCache.counts = counts;
+  return counts;
+}
+
+function getTransactionDuplicateInfo(tx) {
+  const key = getTransactionDuplicateKey(tx);
+  if (!key || key === "||0") {
+    return null;
+  }
+
+  const duplicateCount = getDuplicateTransactionCounts().get(key) || 0;
+  return duplicateCount > 1
+    ? {
+      count: duplicateCount
+    }
+    : null;
+}
+
+function renderTransactionNameCell(tx, isAdmin) {
+  const duplicateInfo = isAdmin ? getTransactionDuplicateInfo(tx) : null;
+  return `
+    <div class="transaction-name-stack">
+      <span>${escapeHtml(tx.customerName)}</span>
+      ${duplicateInfo ? `<span class="duplicate-badge">Duplicate x${duplicateInfo.count}</span>` : ""}
+    </div>
+  `;
 }
 
 function normalizeTransactionType(value) {

@@ -12,7 +12,6 @@ const APP_TIME_ZONE = process.env.APP_TIME_ZONE || "Asia/Yangon";
 const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || "").trim();
 const GEMINI_MODEL = String(process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
 const MAX_JSON_BODY_BYTES = 6_000_000;
-const DUPLICATE_WARNING_WINDOW_MINUTES = 5;
 const root = __dirname;
 const sessions = new Map();
 
@@ -197,7 +196,7 @@ async function handleApiRequest(req, res, url) {
       const createdAt = nowStamp();
       const duplicate = allowDuplicate
         ? null
-        : await findRecentDuplicateTransaction({ type, customerName, amount, referenceStamp: createdAt });
+        : await findRecentDuplicateTransaction({ customerName, phoneNumber, amount, referenceStamp: createdAt });
 
       if (duplicate) {
         sendJson(res, 409, {
@@ -523,9 +522,15 @@ function mapTransactionRow(row) {
   };
 }
 
-async function findRecentDuplicateTransaction({ type, customerName, amount, referenceStamp }) {
+async function findRecentDuplicateTransaction({ customerName, phoneNumber, amount, referenceStamp }) {
   const normalizedCustomerName = normalizeText(customerName);
-  if (!normalizedCustomerName || amount <= 0 || !["ငွေထုတ်", "ငွေသွင်း"].includes(type)) {
+  const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+  const referenceDate = getStampDate(referenceStamp);
+  if (!normalizedCustomerName || amount <= 0) {
+    return null;
+  }
+
+  if (!referenceDate) {
     return null;
   }
 
@@ -542,31 +547,17 @@ async function findRecentDuplicateTransaction({ type, customerName, amount, refe
       created_at,
       updated_at
      FROM transactions
-     WHERE type = $1
-       AND lower(customer_name) = $2
-       AND amount = $3
+     WHERE lower(customer_name) = $1
+       AND amount = $2
+       AND regexp_replace(phone_number, '[^0-9]', '', 'g') = $3
+       AND left(created_at, 10) = $4
      ORDER BY created_at DESC
      LIMIT 5`,
-    [type, normalizedCustomerName, amount]
+    [normalizedCustomerName, amount, normalizedPhoneNumber, referenceDate]
   );
 
-  const referenceTime = parseStampToUtcMs(referenceStamp);
-  if (!Number.isFinite(referenceTime)) {
-    return null;
-  }
-
   for (const row of result.rows) {
-    const transaction = mapTransactionRow(row);
-    const createdTime = parseStampToUtcMs(transaction.createdAt);
-
-    if (!Number.isFinite(createdTime)) {
-      continue;
-    }
-
-    const minutesApart = Math.abs(referenceTime - createdTime) / 60000;
-    if (minutesApart <= DUPLICATE_WARNING_WINDOW_MINUTES) {
-      return transaction;
-    }
+    return mapTransactionRow(row);
   }
 
   return null;
@@ -710,6 +701,10 @@ function calculateProfit(type, amount) {
 
 function isSupportedImageDataUrl(value) {
   return /^data:image\/(png|jpe?g|webp);base64,/i.test(value);
+}
+
+function normalizePhoneNumber(value) {
+  return String(value || "").replace(/\D/g, "");
 }
 
 function normalizeImageImportPayload(body) {
@@ -1560,14 +1555,8 @@ function nowStamp() {
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
 
-function parseStampToUtcMs(value) {
-  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/);
-  if (!match) {
-    return NaN;
-  }
-
-  const [, year, month, day, hour, minute] = match;
-  return Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
+function getStampDate(value) {
+  return String(value || "").slice(0, 10);
 }
 
 start().catch((error) => {
