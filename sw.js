@@ -1,4 +1,4 @@
-const CACHE_NAME = "wallet-counter-pro-shell-v1";
+const CACHE_NAME = "wallet-counter-pro-shell-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -7,7 +7,9 @@ const APP_SHELL = [
   "./manifest.webmanifest",
   "./icon.svg",
   "./icon-192.svg",
-  "./icon-512.svg"
+  "./icon-512.svg",
+  "./icon-192.png",
+  "./icon-512.png"
 ];
 
 self.addEventListener("install", (event) => {
