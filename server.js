@@ -12,6 +12,7 @@ const APP_TIME_ZONE = process.env.APP_TIME_ZONE || "Asia/Yangon";
 const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || "").trim();
 const GEMINI_MODEL = String(process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
 const MAX_JSON_BODY_BYTES = 6_000_000;
+const CASHIER_DUPLICATE_BLOCK_WINDOW_MINUTES = 10;
 const root = __dirname;
 const sessions = new Map();
 
@@ -194,14 +195,37 @@ async function handleApiRequest(req, res, url) {
       }
 
       const createdAt = nowStamp();
+      const recentCashierDuplicate = user.role === "cashier"
+        ? await findRecentDuplicateTransaction({
+          customerName,
+          phoneNumber,
+          amount,
+          referenceStamp: createdAt,
+          createdById: user.id,
+          windowMinutes: CASHIER_DUPLICATE_BLOCK_WINDOW_MINUTES
+        })
+        : null;
+
+      if (recentCashierDuplicate) {
+        sendJson(res, 409, {
+          message: `This exact transaction was already saved by you within the last ${CASHIER_DUPLICATE_BLOCK_WINDOW_MINUTES} minutes. Please check the list before saving again.`,
+          duplicate: recentCashierDuplicate,
+          canOverride: false,
+          duplicatePolicy: "cashier-block"
+        });
+        return;
+      }
+
       const duplicate = allowDuplicate
         ? null
-        : await findRecentDuplicateTransaction({ customerName, phoneNumber, amount, referenceStamp: createdAt });
+        : await findSameDayDuplicateTransaction({ customerName, phoneNumber, amount, referenceStamp: createdAt });
 
       if (duplicate) {
         sendJson(res, 409, {
-          message: "A similar transaction was already saved a few minutes ago.",
-          duplicate
+          message: "A similar transaction was already saved on this date.",
+          duplicate,
+          canOverride: true,
+          duplicatePolicy: "same-day-warning"
         });
         return;
       }
@@ -522,7 +546,7 @@ function mapTransactionRow(row) {
   };
 }
 
-async function findRecentDuplicateTransaction({ customerName, phoneNumber, amount, referenceStamp }) {
+async function findSameDayDuplicateTransaction({ customerName, phoneNumber, amount, referenceStamp }) {
   const normalizedCustomerName = normalizeText(customerName);
   const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
   const referenceDate = getStampDate(referenceStamp);
@@ -558,6 +582,60 @@ async function findRecentDuplicateTransaction({ customerName, phoneNumber, amoun
 
   for (const row of result.rows) {
     return mapTransactionRow(row);
+  }
+
+  return null;
+}
+
+async function findRecentDuplicateTransaction({ customerName, phoneNumber, amount, referenceStamp, createdById, windowMinutes }) {
+  const normalizedCustomerName = normalizeText(customerName);
+  const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+  const referenceDate = getStampDate(referenceStamp);
+  const referenceTime = parseStampToUtcMs(referenceStamp);
+
+  if (!normalizedCustomerName || amount <= 0 || !createdById || !Number.isFinite(referenceTime)) {
+    return null;
+  }
+
+  if (!referenceDate) {
+    return null;
+  }
+
+  const result = await pool.query(
+    `SELECT
+      id,
+      type,
+      customer_name,
+      amount,
+      phone_number,
+      profit,
+      created_by_id,
+      created_by_name,
+      created_at,
+      updated_at
+     FROM transactions
+     WHERE lower(customer_name) = $1
+       AND amount = $2
+       AND regexp_replace(phone_number, '[^0-9]', '', 'g') = $3
+       AND created_by_id = $4
+       AND left(created_at, 10) = $5
+     ORDER BY created_at DESC
+     LIMIT 10`,
+    [normalizedCustomerName, amount, normalizedPhoneNumber, createdById, referenceDate]
+  );
+
+  for (const row of result.rows) {
+    const transaction = mapTransactionRow(row);
+    const createdTime = parseStampToUtcMs(transaction.createdAt);
+
+    if (!Number.isFinite(createdTime)) {
+      continue;
+    }
+
+    const minutesApart = Math.abs(referenceTime - createdTime) / 60000;
+    if (minutesApart >= 1 && minutesApart <= windowMinutes) {
+      return transaction;
+    }
   }
 
   return null;
@@ -1557,6 +1635,16 @@ function nowStamp() {
 
 function getStampDate(value) {
   return String(value || "").slice(0, 10);
+}
+
+function parseStampToUtcMs(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/);
+  if (!match) {
+    return NaN;
+  }
+
+  const [, year, month, day, hour, minute] = match;
+  return Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
 }
 
 start().catch((error) => {

@@ -57,7 +57,7 @@ function render() {
     app.innerHTML = `
       <main class="auth-shell">
         <section class="auth-hero">
-          <div class="brand-badge">Wallet Counter Pro</div>
+          ${renderBrandLockup("hero-brand-lockup")}
           <h1>Loading workspace</h1>
           <p>Connecting to your data and preparing the dashboard.</p>
         </section>
@@ -126,11 +126,40 @@ function getCloseIconSvg() {
   `;
 }
 
+function getBrandLogoSvg() {
+  return `
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <g transform="translate(-3 0)">
+        <path fill="currentColor" d="M18 18h6l5 23h18l7-19H27.5l-1.5-7H18z"></path>
+        <circle cx="29" cy="48" r="4.5" fill="currentColor"></circle>
+        <circle cx="45" cy="48" r="4.5" fill="currentColor"></circle>
+        <rect x="30" y="14" width="6" height="8" rx="1.5" fill="currentColor"></rect>
+        <rect x="38" y="12" width="8" height="10" rx="2" fill="currentColor"></rect>
+        <path fill="currentColor" d="M24 20l3-9h7l-2 9z"></path>
+        <path fill="currentColor" d="M47 14h5l-1 8h-5z"></path>
+      </g>
+    </svg>
+  `;
+}
+
+function renderBrandLockup(extraClass = "") {
+  const className = ["brand-lockup", extraClass].filter(Boolean).join(" ");
+  return `
+    <div class="${className}">
+      <div class="brand-badge brand-logo-badge" aria-hidden="true">${getBrandLogoSvg()}</div>
+      <div class="brand-wordmark">
+        <strong>ZAW KHIN</strong>
+        <span>Taste The Joy</span>
+      </div>
+    </div>
+  `;
+}
+
 function renderAuth() {
   return `
     <main class="auth-shell">
       <section class="auth-hero">
-        <div class="brand-badge">Wallet Counter Pro</div>
+        ${renderBrandLockup("hero-brand-lockup")}
         <h1>Counter app for KBZPay and WavePay teams</h1>
         <p>
           Sign in as admin or cashier, create daily transactions quickly, and keep profit visibility limited to admin accounts.
@@ -210,13 +239,7 @@ function renderDashboard(user) {
   return `
     <div class="dashboard-shell navbar-layout">
       <header class="dashboard-navbar">
-        <div class="navbar-brand">
-          <div class="brand-badge">W</div>
-          <div>
-            <h2>Wallet Counter Pro</h2>
-            <p>KBZPay / WavePay counter team</p>
-          </div>
-        </div>
+        <div class="navbar-brand">${renderBrandLockup()}</div>
         <div class="navbar-meta">
           <div class="navbar-profile">
             <span class="profile-role">${escapeHtml(user.role)}</span>
@@ -573,6 +596,9 @@ function bindAuthEvents() {
 
   document.querySelectorAll("[data-auth-tab]").forEach((button) => {
     button.addEventListener("click", () => {
+      if (state.authTab === button.dataset.authTab) {
+        return;
+      }
       state.authTab = button.dataset.authTab;
       render();
     });
@@ -812,6 +838,7 @@ function bindDashboardEvents() {
 
   if (dateFilterToggleButton) {
     dateFilterToggleButton.addEventListener("click", (event) => {
+      event.stopImmediatePropagation();
       event.stopPropagation();
       toggleCalendarPopover();
     });
@@ -819,7 +846,39 @@ function bindDashboardEvents() {
 
   if (dateFilterPopover) {
     dateFilterPopover.addEventListener("click", (event) => {
+      event.stopImmediatePropagation();
       event.stopPropagation();
+
+      const target = event.target.closest("button");
+      if (!target) {
+        return;
+      }
+
+      if (target.id === "calendarPrevButton") {
+        state.calendarMonth = shiftCalendarMonth(-1);
+        syncCalendarControls();
+        return;
+      }
+
+      if (target.id === "calendarNextButton") {
+        state.calendarMonth = shiftCalendarMonth(1);
+        syncCalendarControls();
+        return;
+      }
+
+      if (target.id === "calendarTodayButton") {
+        applyDateFilter(getTodayDatePrefix());
+        return;
+      }
+
+      if (target.id === "calendarClearButton") {
+        clearDateFilter();
+        return;
+      }
+
+      if (target.dataset.calendarDate) {
+        applyDateFilter(target.dataset.calendarDate);
+      }
     });
   }
 
@@ -862,40 +921,11 @@ function bindDashboardEvents() {
     });
   });
 
-  if (calendarPrevButton) {
-    calendarPrevButton.addEventListener("click", () => {
-      state.calendarMonth = shiftCalendarMonth(-1);
-      syncCalendarControls();
-    });
-  }
-
-  if (calendarNextButton) {
-    calendarNextButton.addEventListener("click", () => {
-      state.calendarMonth = shiftCalendarMonth(1);
-      syncCalendarControls();
-    });
-  }
-
-  if (calendarTodayButton) {
-    calendarTodayButton.addEventListener("click", () => {
-      applyDateFilter(getTodayDatePrefix());
-    });
-  }
-
-  if (calendarClearButton) {
-    calendarClearButton.addEventListener("click", () => {
-      clearDateFilter();
-    });
-  }
-
-  document.querySelectorAll("[data-calendar-date]").forEach((button) => {
-    button.addEventListener("click", () => {
-      applyDateFilter(button.dataset.calendarDate);
-    });
-  });
-
   if (tableScopeToday) {
     tableScopeToday.addEventListener("click", () => {
+      if (state.historyScope === "today" && !state.filterDate) {
+        return;
+      }
       state.historyScope = "today";
       state.filterDate = "";
       state.currentPage = 1;
@@ -905,6 +935,9 @@ function bindDashboardEvents() {
 
   if (tableScopeAllDates) {
     tableScopeAllDates.addEventListener("click", () => {
+      if (state.historyScope === "all" && !state.filterDate) {
+        return;
+      }
       state.historyScope = "all";
       state.filterDate = "";
       state.currentPage = 1;
@@ -914,6 +947,9 @@ function bindDashboardEvents() {
 
   if (tableFilterAll) {
     tableFilterAll.addEventListener("click", () => {
+      if (state.filterType === "all") {
+        return;
+      }
       state.filterType = "all";
       state.currentPage = 1;
       render();
@@ -922,6 +958,9 @@ function bindDashboardEvents() {
 
   if (tableFilterWithdraw) {
     tableFilterWithdraw.addEventListener("click", () => {
+      if (state.filterType === "ငွေထုတ်") {
+        return;
+      }
       state.filterType = "ငွေထုတ်";
       state.currentPage = 1;
       render();
@@ -930,6 +969,9 @@ function bindDashboardEvents() {
 
   if (tableFilterDeposit) {
     tableFilterDeposit.addEventListener("click", () => {
+      if (state.filterType === "ငွေသွင်း") {
+        return;
+      }
       state.filterType = "ငွေသွင်း";
       state.currentPage = 1;
       render();
@@ -938,6 +980,9 @@ function bindDashboardEvents() {
 
   if (tableFilterDuplicated) {
     tableFilterDuplicated.addEventListener("click", () => {
+      if (state.filterType === "duplicated") {
+        return;
+      }
       state.filterType = "duplicated";
       state.currentPage = 1;
       render();
@@ -946,7 +991,11 @@ function bindDashboardEvents() {
 
   if (paginationPrevButton) {
     paginationPrevButton.addEventListener("click", () => {
-      state.currentPage = Math.max(1, state.currentPage - 1);
+      const nextPage = Math.max(1, state.currentPage - 1);
+      if (nextPage === state.currentPage) {
+        return;
+      }
+      state.currentPage = nextPage;
       render();
     });
   }
@@ -954,7 +1003,11 @@ function bindDashboardEvents() {
   if (paginationNextButton) {
     paginationNextButton.addEventListener("click", () => {
       const pagination = getPaginationState(getVisibleTransactions().length);
-      state.currentPage = Math.min(pagination.totalPages, state.currentPage + 1);
+      const nextPage = Math.min(pagination.totalPages, state.currentPage + 1);
+      if (nextPage === state.currentPage) {
+        return;
+      }
+      state.currentPage = nextPage;
       render();
     });
   }
@@ -968,7 +1021,12 @@ function bindDashboardEvents() {
         return;
       }
 
-      state.currentPage = Math.min(pagination.totalPages, Math.max(1, Math.trunc(rawValue)));
+      const nextPage = Math.min(pagination.totalPages, Math.max(1, Math.trunc(rawValue)));
+      if (nextPage === state.currentPage) {
+        paginationPageInput.value = String(state.currentPage);
+        return;
+      }
+      state.currentPage = nextPage;
       render();
     };
 
@@ -987,6 +1045,9 @@ function bindDashboardEvents() {
 
   typeToggleButtons.forEach((button) => {
     button.addEventListener("click", () => {
+      if (document.getElementById("transactionType")?.value === button.dataset.transactionType) {
+        return;
+      }
       setTransactionType(button.dataset.transactionType);
       updateProfitPreview();
     });
@@ -1602,11 +1663,6 @@ function syncCalendarControls() {
 
   if (grid) {
     grid.innerHTML = buildCalendarDayButtons(viewDate.getUTCFullYear(), viewDate.getUTCMonth());
-    grid.querySelectorAll("[data-calendar-date]").forEach((button) => {
-      button.addEventListener("click", () => {
-        applyDateFilter(button.dataset.calendarDate);
-      });
-    });
   }
 }
 
@@ -1749,6 +1805,11 @@ async function submitTransactionForm({ allowDuplicate = false, draft = null } = 
     closeModal();
   } catch (error) {
     if (!state.editingId && error.status === 409 && error.payload?.duplicate) {
+      if (error.payload.canOverride === false) {
+        setTransactionMessage(message, error.message);
+        return;
+      }
+
       openDuplicateConfirm({ type, customerName, amount, phoneNumber }, error.payload.duplicate);
       return;
     }
@@ -1913,23 +1974,28 @@ function buildCalendarDayButtons(year, month) {
   }
 
   for (let day = 1; day <= daysInMonth; day += 1) {
-    const isoDate = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const classes = ["date-day"];
+      const isoDate = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      const classes = ["date-day"];
+      const isFuture = isoDate > today;
 
     if (selectedDate === isoDate) {
-      classes.push("selected");
-    }
+        classes.push("selected");
+      }
 
     if (today === isoDate) {
-      classes.push("today");
-    }
+        classes.push("today");
+      }
 
-    cells.push(`
-      <button class="${classes.join(" ")}" data-calendar-date="${isoDate}" type="button">
-        ${day}
-      </button>
-    `);
-  }
+      if (isFuture) {
+        classes.push("disabled");
+      }
+
+      cells.push(`
+        <button class="${classes.join(" ")}" data-calendar-date="${isoDate}" type="button" ${isFuture ? "disabled aria-disabled=\"true\"" : ""}>
+          ${day}
+        </button>
+      `);
+    }
 
   return cells.join("");
 }
