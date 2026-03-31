@@ -636,7 +636,7 @@ async function findRecentDuplicateTransaction({ customerName, phoneNumber, amoun
     }
 
     const minutesApart = Math.abs(referenceTime - createdTime) / 60000;
-    if (minutesApart >= 1 && minutesApart <= windowMinutes) {
+    if (minutesApart <= windowMinutes) {
       return transaction;
     }
   }

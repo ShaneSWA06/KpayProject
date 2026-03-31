@@ -1,4 +1,4 @@
-const CACHE_NAME = "wallet-counter-pro-shell-v2";
+const CACHE_NAME = "wallet-counter-pro-shell-v3";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -44,6 +44,23 @@ self.addEventListener("fetch", (event) => {
 
   if (requestUrl.pathname.startsWith("/api/")) {
     event.respondWith(fetch(event.request));
+    return;
+  }
+
+  const isAppShellRequest = APP_SHELL.some((assetPath) => requestUrl.pathname === new URL(assetPath, self.location.origin + "/").pathname);
+
+  if (isAppShellRequest || requestUrl.pathname === "/" || requestUrl.pathname.endsWith("/index.html")) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(event.request))
+    );
     return;
   }
 

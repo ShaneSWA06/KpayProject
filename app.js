@@ -1,15 +1,18 @@
 const THEME_KEY = "wallet-counter-pro-theme";
+const LANGUAGE_KEY = "wallet-counter-pro-language";
 const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:4173" : "";
 const TRANSACTIONS_PER_PAGE = 10;
 const APP_TIME_ZONE = "Asia/Yangon";
 const MAX_NAME_LENGTH = 40;
 const MAX_AMOUNT_DIGITS = 12;
 const MAX_PHONE_DIGITS = 11;
+const LANGUAGE_SWITCH_ANIMATION_MS = 220;
 
 const state = {
   transactions: [],
   sessionUser: null,
   theme: loadTheme(),
+  language: loadLanguage(),
   search: "",
   filterDate: "",
   filterTimeFrom: "",
@@ -24,6 +27,7 @@ const state = {
   filterType: "all",
   currentPage: 1,
   modalOpen: false,
+  navMenuOpen: false,
   detailsId: "",
   deleteConfirmId: "",
   editingId: "",
@@ -36,6 +40,248 @@ const app = document.getElementById("app");
 const duplicateIndexCache = {
   transactions: null,
   counts: new Map()
+};
+let languageSwitchRenderTimer = 0;
+
+const translations = {
+  en: {
+    loadingWorkspace: "Loading workspace",
+    connectingData: "Connecting to your data and preparing the dashboard.",
+    pleaseWait: "Please wait...",
+    counterAppTitle: "Counter app for KBZPay and WavePay teams",
+    counterAppCopy: "Sign in as admin or cashier, create daily transactions quickly, and keep profit visibility limited to admin accounts.",
+    admin: "Admin",
+    adminCopy: "Can view profit and full dashboard metrics",
+    cashier: "Cashier",
+    cashierCopy: "Can create and manage transactions without profit visibility",
+    login: "Login",
+    signUp: "Sign Up",
+    welcomeBack: "Welcome back",
+    signInContinue: "Sign in to continue to the counter dashboard.",
+    username: "Username",
+    password: "Password",
+    show: "Show",
+    hide: "Hide",
+    createAccount: "Create account",
+    newSignupsCashierOnly: "New sign ups create cashier accounts only.",
+    fullName: "Full Name",
+    createAccountButton: "Create Account",
+    logout: "Logout",
+    operationsDashboard: "Operations Dashboard",
+    dailyTransactions: "Daily Transactions",
+    searchPlaceholder: "Search by customer, phone, or user",
+    totalTransactions: "Total Transactions",
+    totalAmount: "Total Amount",
+    withdrawAmount: "Withdraw Amount",
+    depositAmount: "Deposit Amount",
+    adminOnly: "Admin Only",
+    totalProfit: "Total Profit",
+    profitByTransactionType: "Profit By Transaction Type",
+    visibleOnlyAdmin: "Visible only to admin accounts.",
+    withdrawProfit: "Withdraw Profit",
+    depositProfit: "Deposit Profit",
+    transactionList: "Transaction List",
+    transactionListCopy: "The plus button creates new transactions with name, amount, and optional phone number.",
+    today: "Today",
+    allDates: "All Dates",
+    all: "All",
+    duplicated: "Duplicated",
+    page: "Page",
+    of: "of",
+    showingTransactions: "Showing {start}-{end} of {total} transactions",
+    noTransactionsToShow: "No transactions to show",
+    date: "Date",
+    type: "Type",
+    name: "Name",
+    phone: "Phone",
+    amount: "Amount",
+    profit: "Profit",
+    createdBy: "Created By",
+    action: "Action",
+    noTransactionsYet: "No transactions yet. Click the plus button to create one.",
+    viewDetails: "View details",
+    editTransaction: "Edit transaction",
+    deleteTransaction: "Delete transaction",
+    openDateFilter: "Open date filter",
+    changeDateFilterFrom: "Change date filter from {date}",
+    dateFilterTitle: "Date filter: {date}",
+    filterByDate: "Filter by date",
+    dateFilter: "Date Filter",
+    clear: "Clear",
+    newCounterTransaction: "New Counter Transaction",
+    editTransactionTitle: "Edit Transaction",
+    createTransactionTitle: "Create Transaction",
+    updateTransaction: "Update Transaction",
+    saveTransaction: "Save Transaction",
+    transactionType: "Transaction Type",
+    customerName: "Name",
+    customerNamePlaceholder: "Customer name",
+    moneyMmk: "Money (MMK)",
+    enterAmount: "Enter amount",
+    phoneOptional: "Phone Number (Optional)",
+    imageOcrImport: "Image OCR Import",
+    imageOcrCopy: "Upload a receipt or screenshot, or take a photo, and let the app create the transaction automatically.",
+    uploadImage: "Upload Image",
+    takePhoto: "Take Photo",
+    openingCamera: "Opening camera...",
+    readingImage: "Reading image...",
+    creatingTransaction: "Creating transaction...",
+    scanningImage: "Scanning image and creating the transaction...",
+    ocrNoDetails: "No transaction details were found in that image.",
+    ocrNameUnclear: "OCR found the transaction, but the name was not clear. Please fill the name and save.",
+    profitRulePreview: "Profit Rule Preview",
+    detailsTitle: "Transaction Details",
+    closeDetails: "Close details",
+    duplicateStatus: "Duplicate Status",
+    noDuplicateMatch: "No duplicate match",
+    deleteTransactionHeading: "Delete Transaction",
+    deleteQuestion: "Delete this transaction?",
+    deleteCopy: "Are you sure you want to delete {name} for {amount}?",
+    cancel: "Cancel",
+    delete: "Delete",
+    duplicateWarning: "Duplicate Warning",
+    possibleDuplicate: "Possible duplicate transaction",
+    duplicateCopy: "A transaction with the {basis} was already saved earlier on {date} at {time}.",
+    goBack: "Go Back",
+    saveAnyway: "Save Anyway",
+    continueOnlyIfNew: "Continue only if this is really a new transaction.",
+    sameNamePhoneAmount: "same name, phone number, and amount",
+    sameNameAmountNoPhone: "same name, amount, and no phone number",
+    profitOn: "Profit On {date}",
+    nameRequired: "Name is required.",
+    nameTooLong: "Name is too long. Please keep it within {count} characters.",
+    amountRequired: "Amount must be greater than 0.",
+    amountTooLarge: "Amount is too large. Please keep it within {count} digits.",
+    phoneInvalid: "Phone number must start with 09 and have 9 to 11 digits.",
+    cashierDuplicateBlocked: "This exact transaction was already saved within the last 10 minutes. Please check the list before saving again.",
+    uploadImageOnly: "Please upload an image file.",
+    imageProcessingUnsupported: "Image processing is not supported in this browser.",
+    serverUnreachable: "Cannot reach the server. Open the app from http://127.0.0.1:4173 or make sure npm start is running.",
+    requestFailed: "Request failed.",
+    languageEnglish: "English",
+    languageBurmese: "မြန်မာ",
+    withdraw: "Withdraw",
+    deposit: "Deposit"
+  },
+  my: {
+    loadingWorkspace: "စနစ်ကို ဖွင့်နေသည်",
+    connectingData: "ဒေတာများကို ချိတ်ဆက်ပြီး dashboard ကို ပြင်ဆင်နေသည်။",
+    pleaseWait: "ခဏစောင့်ပါ...",
+    counterAppTitle: "KBZPay နှင့် WavePay အဖွဲ့အတွက် ကောင်တာအက်ပ်",
+    counterAppCopy: "Admin သို့မဟုတ် Cashier အဖြစ် ဝင်ရောက်ပြီး နေ့စဉ် transaction များကို မြန်မြန်ဆန်ဆန် ဖန်တီးနိုင်ပြီး profit ကို admin အကောင့်များသာ မြင်နိုင်ပါသည်။",
+    admin: "Admin",
+    adminCopy: "Profit နှင့် dashboard metrics အပြည့်အစုံကို ကြည့်နိုင်သည်",
+    cashier: "Cashier",
+    cashierCopy: "Profit မမြင်ဘဲ transaction များကို ဖန်တီးနှင့် စီမံနိုင်သည်",
+    login: "အကောင့်ဝင်ရန်",
+    signUp: "အကောင့်ဖွင့်ရန်",
+    welcomeBack: "ပြန်လည်ကြိုဆိုပါသည်",
+    signInContinue: "Counter dashboard ကို ဆက်လက်အသုံးပြုရန် အကောင့်ဝင်ပါ။",
+    username: "Username",
+    password: "Password",
+    show: "ပြရန်",
+    hide: "ဖျောက်ရန်",
+    createAccount: "အကောင့်ဖွင့်ရန်",
+    newSignupsCashierOnly: "အသစ်ဖွင့်သော account များသည် cashier account များသာ ဖြစ်မည်။",
+    fullName: "အမည်အပြည့်အစုံ",
+    createAccountButton: "အကောင့်ဖန်တီးရန်",
+    logout: "ထွက်ရန်",
+    operationsDashboard: "လုပ်ငန်းဆိုင်ရာ Dashboard",
+    dailyTransactions: "နေ့စဉ် Transactions",
+    searchPlaceholder: "အမည်၊ ဖုန်း၊ သို့မဟုတ် အသုံးပြုသူဖြင့် ရှာရန်",
+    totalTransactions: "စုစုပေါင်း Transactions",
+    totalAmount: "စုစုပေါင်း Amount",
+    withdrawAmount: "ငွေထုတ် Amount",
+    depositAmount: "ငွေသွင်း Amount",
+    adminOnly: "Admin သီးသန့်",
+    totalProfit: "စုစုပေါင်း Profit",
+    profitByTransactionType: "Transaction အမျိုးအစားအလိုက် Profit",
+    visibleOnlyAdmin: "Admin account များသာ မြင်နိုင်ပါသည်။",
+    withdrawProfit: "ငွေထုတ် Profit",
+    depositProfit: "ငွေသွင်း Profit",
+    transactionList: "Transaction စာရင်း",
+    transactionListCopy: "အပေါင်းခလုတ်ဖြင့် အမည်၊ amount နှင့် optional phone number ပါသော transaction အသစ်များ ဖန်တီးနိုင်သည်။",
+    today: "ယနေ့",
+    allDates: "ရက်စွဲအားလုံး",
+    all: "အားလုံး",
+    duplicated: "ထပ်နေသော",
+    page: "စာမျက်နှာ",
+    of: " / ",
+    showingTransactions: "Transaction {total} ခုတွင် {start}-{end} ကို ပြနေသည်",
+    noTransactionsToShow: "ပြရန် transaction မရှိသေးပါ",
+    date: "ရက်စွဲ",
+    type: "အမျိုးအစား",
+    name: "အမည်",
+    phone: "ဖုန်း",
+    amount: "Amount",
+    profit: "Profit",
+    createdBy: "ဖန်တီးသူ",
+    action: "လုပ်ဆောင်ချက်",
+    noTransactionsYet: "Transaction မရှိသေးပါ။ အသစ်ဖန်တီးရန် plus button ကိုနှိပ်ပါ။",
+    viewDetails: "အသေးစိတ်ကြည့်ရန်",
+    editTransaction: "Transaction ပြင်ရန်",
+    deleteTransaction: "Transaction ဖျက်ရန်",
+    openDateFilter: "ရက်စွဲ filter ဖွင့်ရန်",
+    changeDateFilterFrom: "{date} မှ ရက်စွဲ filter ပြောင်းရန်",
+    dateFilterTitle: "ရက်စွဲ filter: {date}",
+    filterByDate: "ရက်စွဲဖြင့် filter လုပ်ရန်",
+    dateFilter: "ရက်စွဲ Filter",
+    clear: "ရှင်းရန်",
+    newCounterTransaction: "Counter Transaction အသစ်",
+    editTransactionTitle: "Transaction ပြင်ရန်",
+    createTransactionTitle: "Transaction ဖန်တီးရန်",
+    updateTransaction: "Transaction ကို Update လုပ်ရန်",
+    saveTransaction: "Transaction သိမ်းရန်",
+    transactionType: "Transaction အမျိုးအစား",
+    customerName: "အမည်",
+    customerNamePlaceholder: "Customer name ကိုထည့်ပါ",
+    moneyMmk: "ငွေပမာဏ (MMK)",
+    enterAmount: "Amount ထည့်ပါ",
+    phoneOptional: "ဖုန်းနံပါတ် (မဖြစ်မနေမဟုတ်)",
+    imageOcrImport: "Image OCR Import",
+    imageOcrCopy: "Voucher သို့မဟုတ် screenshot တင်ပါ၊ မဟုတ်လျှင် ဓာတ်ပုံရိုက်ပြီး app က transaction ကို အလိုအလျောက်ဖန်တီးပေးမည်။",
+    uploadImage: "ပုံတင်ရန်",
+    takePhoto: "ဓာတ်ပုံရိုက်ရန်",
+    openingCamera: "ကင်မရာဖွင့်နေသည်...",
+    readingImage: "ပုံကို ဖတ်နေသည်...",
+    creatingTransaction: "Transaction ဖန်တီးနေသည်...",
+    scanningImage: "ပုံကို scan လုပ်ပြီး transaction ဖန်တီးနေသည်...",
+    ocrNoDetails: "ဤပုံထဲတွင် transaction အသေးစိတ်ကို မတွေ့ပါ။",
+    ocrNameUnclear: "OCR က transaction ကို တွေ့ခဲ့ပေမယ့် အမည်က မရှင်းလင်းပါ။ အမည်ဖြည့်ပြီး save လုပ်ပါ။",
+    profitRulePreview: "Profit ကြိုတင်ကြည့်ရှုမှု",
+    detailsTitle: "Transaction အသေးစိတ်",
+    closeDetails: "အသေးစိတ်ပိတ်ရန်",
+    duplicateStatus: "ထပ်နေမှု အခြေအနေ",
+    noDuplicateMatch: "ထပ်နေမှု မတွေ့ပါ",
+    deleteTransactionHeading: "Transaction ဖျက်ရန်",
+    deleteQuestion: "ဤ transaction ကို ဖျက်မလား?",
+    deleteCopy: "{name} ၏ {amount} transaction ကို ဖျက်ချင်ပါသလား?",
+    cancel: "မလုပ်တော့ပါ",
+    delete: "ဖျက်ရန်",
+    duplicateWarning: "ထပ်နေမှု သတိပေးချက်",
+    possibleDuplicate: "ထပ်နေသော transaction ဖြစ်နိုင်သည်",
+    duplicateCopy: "{basis} တူညီသော transaction ကို {date} ရက် {time} အချိန်တွင် သိမ်းထားပြီးဖြစ်သည်။",
+    goBack: "နောက်သို့",
+    saveAnyway: "သိမ်းမည်",
+    continueOnlyIfNew: "တကယ်အသစ်ဖြစ်မှသာ ဆက်လုပ်ပါ။",
+    sameNamePhoneAmount: "အမည်၊ ဖုန်းနံပါတ် နှင့် amount တူညီသော",
+    sameNameAmountNoPhone: "အမည်၊ amount တူပြီး ဖုန်းမပါသော",
+    profitOn: "{date} ရက် Profit",
+    nameRequired: "အမည် လိုအပ်ပါသည်။",
+    nameTooLong: "အမည်သည် အရမ်းရှည်နေပါသည်။ {count} လုံးအတွင်းသာ ထည့်ပါ။",
+    amountRequired: "Amount သည် 0 ထက် ကြီးရပါမည်။",
+    amountTooLarge: "Amount အရမ်းကြီးနေပါသည်။ {count} လုံးအတွင်းသာ ထည့်ပါ။",
+    phoneInvalid: "ဖုန်းနံပါတ်သည် 09 ဖြင့် စပြီး 9 မှ 11 လုံးရှိရပါမည်။",
+    cashierDuplicateBlocked: "ဤ transaction တူညီမှုကို နောက်ဆုံး ၁၀ မိနစ်အတွင်း သိမ်းထားပြီးဖြစ်ပါသည်။ ပြန်မသိမ်းမီ စာရင်းကို စစ်ဆေးပါ။",
+    uploadImageOnly: "Image ဖိုင်ကိုသာ တင်ပါ။",
+    imageProcessingUnsupported: "ဤ browser တွင် image processing မပံ့ပိုးပါ။",
+    serverUnreachable: "Server ကို မချိတ်ဆက်နိုင်ပါ။ http://127.0.0.1:4173 မှ ဖွင့်ထားကြောင်း သို့မဟုတ် npm start အလုပ်လုပ်နေကြောင်း စစ်ပါ။",
+    requestFailed: "Request မအောင်မြင်ပါ။",
+    languageEnglish: "English",
+    languageBurmese: "မြန်မာ",
+    withdraw: "ငွေထုတ်",
+    deposit: "ငွေသွင်း"
+  }
 };
 
 if ("serviceWorker" in navigator) {
@@ -58,6 +304,102 @@ function saveTheme(value) {
   window.localStorage.setItem(THEME_KEY, value);
 }
 
+function loadLanguage() {
+  try {
+    const value = window.localStorage.getItem(LANGUAGE_KEY);
+    return value === "en" ? "en" : "my";
+  } catch {
+    return "my";
+  }
+}
+
+function saveLanguage(value) {
+  window.localStorage.setItem(LANGUAGE_KEY, value);
+}
+
+function syncLanguageSwitchUi(nextLanguage) {
+  document.querySelectorAll(".language-switch-shell").forEach((element) => {
+    element.classList.toggle("english-active", nextLanguage === "en");
+    element.classList.toggle("myanmar-active", nextLanguage !== "en");
+  });
+
+  document.querySelectorAll("[data-language-switch]").forEach((button) => {
+    const isActive = button.dataset.languageSwitch === nextLanguage;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
+function setLanguage(nextLanguage) {
+  const normalizedLanguage = nextLanguage === "en" ? "en" : "my";
+  if (normalizedLanguage === state.language) {
+    return;
+  }
+
+  if (languageSwitchRenderTimer) {
+    window.clearTimeout(languageSwitchRenderTimer);
+  }
+
+  syncLanguageSwitchUi(normalizedLanguage);
+
+  languageSwitchRenderTimer = window.setTimeout(() => {
+    state.navMenuOpen = false;
+    state.language = normalizedLanguage;
+    saveLanguage(normalizedLanguage);
+    languageSwitchRenderTimer = 0;
+    render();
+  }, LANGUAGE_SWITCH_ANIMATION_MS);
+}
+
+function t(key, vars = {}) {
+  const languagePack = translations[state.language] || translations.my;
+  const fallbackPack = translations.en;
+  let template = languagePack[key] || fallbackPack[key] || key;
+  Object.entries(vars).forEach(([name, value]) => {
+    template = template.replace(new RegExp(`\\{${name}\\}`, "g"), String(value));
+  });
+  return template;
+}
+
+function translateTransactionType(value) {
+  if (value === "ငွေထုတ်") {
+    return state.language === "en" ? t("withdraw") : "ငွေထုတ်";
+  }
+  if (value === "ငွေသွင်း") {
+    return state.language === "en" ? t("deposit") : "ငွေသွင်း";
+  }
+  return value;
+}
+
+function translateRole(value) {
+  const normalized = normalizeText(value);
+  if (normalized === "admin") {
+    return t("admin");
+  }
+  if (normalized === "cashier") {
+    return t("cashier");
+  }
+  return value;
+}
+
+function renderLanguageSelect(selectId) {
+  const isEnglish = state.language === "en";
+  return `
+    <div id="${selectId}" class="language-switch-shell ${isEnglish ? "english-active" : "myanmar-active"}" role="group" aria-label="Language">
+      <button class="language-orbit-button language-orbit-button-myanmar ${state.language === "my" ? "active" : ""}" data-language-switch="my" type="button" aria-pressed="${state.language === "my"}" title="${t("languageBurmese")}">
+        <span class="language-flag-orbit myanmar-orbit-flag">
+          <span class="language-flag myanmar-flag"></span>
+        </span>
+      </button>
+      <button class="language-orbit-button language-orbit-button-english ${state.language === "en" ? "active" : ""}" data-language-switch="en" type="button" aria-pressed="${state.language === "en"}" title="${t("languageEnglish")}">
+        <span class="language-flag-orbit english-orbit-flag">
+          <span class="language-flag english-flag"></span>
+        </span>
+      </button>
+    </div>
+  `;
+}
+
 function render() {
   document.body.setAttribute("data-theme", state.theme);
 
@@ -66,12 +408,12 @@ function render() {
       <main class="auth-shell">
         <section class="auth-hero">
           ${renderBrandLockup("hero-brand-lockup")}
-          <h1>Loading workspace</h1>
-          <p>Connecting to your data and preparing the dashboard.</p>
+          <h1>${t("loadingWorkspace")}</h1>
+          <p>${t("connectingData")}</p>
         </section>
         <section class="auth-card">
           <div class="panel">
-            <p class="subtle">Please wait...</p>
+            <p class="subtle">${t("pleaseWait")}</p>
           </div>
         </section>
       </main>
@@ -134,6 +476,16 @@ function getCloseIconSvg() {
   `;
 }
 
+function getHamburgerIconSvg() {
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h16"></path>
+      <path d="M4 12h16"></path>
+      <path d="M4 17h16"></path>
+    </svg>
+  `;
+}
+
 function getBrandLogoSvg() {
   return `
     <svg viewBox="0 0 64 64" aria-hidden="true">
@@ -168,64 +520,65 @@ function renderAuth() {
     <main class="auth-shell">
       <section class="auth-hero">
         ${renderBrandLockup("hero-brand-lockup")}
-        <h1>Counter app for KBZPay and WavePay teams</h1>
-        <p>
-          Sign in as admin or cashier, create daily transactions quickly, and keep profit visibility limited to admin accounts.
-        </p>
+        <h1>${t("counterAppTitle")}</h1>
+        <p>${t("counterAppCopy")}</p>
         <div class="hero-points">
-          <div><strong>Admin</strong><span>Can view profit and full dashboard metrics</span></div>
-          <div><strong>Cashier</strong><span>Can create and manage transactions without profit visibility</span></div>
+          <div><strong>${t("admin")}</strong><span>${t("adminCopy")}</span></div>
+          <div><strong>${t("cashier")}</strong><span>${t("cashierCopy")}</span></div>
         </div>
       </section>
 
       <section class="auth-card">
         <div class="auth-topbar">
           <div class="auth-tabs">
-            <button class="tab-button ${state.authTab === "login" ? "active" : ""}" data-auth-tab="login" type="button">Login</button>
-            <button class="tab-button ${state.authTab === "signup" ? "active" : ""}" data-auth-tab="signup" type="button">Sign Up</button>
+            <button class="tab-button ${state.authTab === "login" ? "active" : ""}" data-auth-tab="login" type="button">${t("login")}</button>
+            <button class="tab-button ${state.authTab === "signup" ? "active" : ""}" data-auth-tab="signup" type="button">${t("signUp")}</button>
           </div>
-          <button id="themeToggleAuth" class="theme-toggle-button icon-only" type="button" aria-label="${getThemeLabel()}" title="${getThemeLabel()}">
-            <span class="theme-toggle-icon">${getThemeIconSvg()}</span>
-          </button>
+          <div class="auth-topbar-actions">
+            ${renderLanguageSelect("languageSelectAuth")}
+            <button id="themeToggleAuth" class="theme-toggle-button icon-only" type="button" aria-label="${getThemeLabel()}" title="${getThemeLabel()}">
+              <span class="theme-toggle-icon">${getThemeIconSvg()}</span>
+            </button>
+          </div>
         </div>
 
         <form id="loginForm" class="auth-form ${state.authTab === "login" ? "" : "hidden"}">
-          <h2>Welcome back</h2>
-          <p class="subtle">Sign in to continue to the counter dashboard.</p>
+          <h2>${t("welcomeBack")}</h2>
+          <p class="subtle">${t("signInContinue")}</p>
           <label>
-            <span>Username</span>
+            <span>${t("username")}</span>
             <input id="loginUsername" type="text" required>
           </label>
           <label>
-            <span>Password</span>
+            <span>${t("password")}</span>
             <div class="password-field">
               <input id="loginPassword" type="password" required>
-              <button class="password-toggle" data-password-toggle="loginPassword" type="button">Show</button>
+              <button class="password-toggle" data-password-toggle="loginPassword" type="button">${t("show")}</button>
             </div>
           </label>
-          <button class="primary-button auth-button" type="submit">Login</button>
+          <button class="primary-button auth-button" type="submit">${t("login")}</button>
           <p id="loginMessage" class="form-message"></p>
         </form>
 
         <form id="signupForm" class="auth-form ${state.authTab === "signup" ? "" : "hidden"}">
-          <h2>Create account</h2>
-          <p class="subtle">New sign ups create cashier accounts only.</p>
+          <h2>${t("createAccount")}</h2>
+          <p class="subtle">${t("newSignupsCashierOnly")}</p>
           <label>
-            <span>Full Name</span>
+            <span>${t("fullName")}</span>
             <input id="signupName" type="text" required>
           </label>
           <label>
-            <span>Username</span>
+            <span>${t("username")}</span>
             <input id="signupUsername" type="text" required>
           </label>
           <label>
-            <span>Password</span>
+            <span>${t("password")}</span>
             <div class="password-field">
               <input id="signupPassword" type="password" required>
-              <button class="password-toggle" data-password-toggle="signupPassword" type="button">Show</button>
+              <button class="password-toggle" data-password-toggle="signupPassword" type="button">${t("show")}</button>
             </div>
           </label>
-          <button class="primary-button auth-button" type="submit">Create Account</button>
+          <button class="primary-button auth-button" type="submit">${t("createAccountButton")}</button>
           <p id="signupMessage" class="form-message"></p>
         </form>
       </section>
@@ -245,44 +598,51 @@ function renderDashboard(user) {
   const isAdmin = user.role === "admin";
 
   return `
-    <div class="dashboard-shell navbar-layout">
+    <div class="dashboard-page">
+      <div class="dashboard-navbar-shell">
       <header class="dashboard-navbar">
         <div class="navbar-brand">${renderBrandLockup()}</div>
-        <div class="navbar-meta">
+        <button id="navbarMenuButton" class="navbar-menu-button" type="button" aria-label="Toggle navigation menu" aria-expanded="${state.navMenuOpen ? "true" : "false"}">
+          ${getHamburgerIconSvg()}
+        </button>
+        <div class="navbar-meta ${state.navMenuOpen ? "menu-open" : ""}">
           <div class="navbar-profile">
-            <span class="profile-role">${escapeHtml(user.role)}</span>
+            <span class="profile-role">${escapeHtml(translateRole(user.role))}</span>
             <div>
               <strong>${escapeHtml(user.fullName)}</strong>
               <small>@${escapeHtml(user.username)}</small>
             </div>
           </div>
           <div class="navbar-actions">
+            ${renderLanguageSelect("languageSelectDashboard")}
             <button id="themeToggleDashboard" class="theme-toggle-button icon-only" type="button" aria-label="${getThemeLabel()}" title="${getThemeLabel()}">
               <span class="theme-toggle-icon">${getThemeIconSvg()}</span>
             </button>
-            <button id="headerLogoutButton" class="secondary-button danger-button" type="button">Logout</button>
+            <button id="headerLogoutButton" class="secondary-button danger-button" type="button">${t("logout")}</button>
           </div>
         </div>
       </header>
+      </div>
 
+      <div class="dashboard-shell navbar-layout">
       <main class="content">
         <header class="topbar">
           <div class="topbar-main">
             <div class="topbar-heading">
-              <p class="eyebrow dark">Operations Dashboard</p>
-              <h1>Daily Transactions</h1>
+              <p class="eyebrow dark">${t("operationsDashboard")}</p>
+              <h1>${t("dailyTransactions")}</h1>
             </div>
           </div>
           <div class="topbar-tools ${isAdmin ? "admin-tools" : ""}">
-            <input id="searchInput" class="search-input" type="search" placeholder="Search by customer, phone, or user" value="${escapeHtml(state.search)}">
+            <input id="searchInput" class="search-input" type="search" placeholder="${t("searchPlaceholder")}" value="${escapeHtml(state.search)}">
             ${isAdmin ? renderTimeFilterControls() : ""}
             <div class="date-filter-shell">
               <button
                 id="dateFilterToggleButton"
                 class="icon-button date-filter-toggle ${state.filterDate ? "active" : ""}"
                 type="button"
-                aria-label="${state.filterDate ? `Change date filter from ${escapeHtml(state.filterDate)}` : "Open date filter"}"
-                title="${state.filterDate ? `Date filter: ${escapeHtml(state.filterDate)}` : "Filter by date"}"
+                aria-label="${state.filterDate ? t("changeDateFilterFrom", { date: escapeHtml(state.filterDate) }) : t("openDateFilter")}"
+                title="${state.filterDate ? t("dateFilterTitle", { date: escapeHtml(state.filterDate) }) : t("filterByDate")}"
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <rect x="3" y="5" width="18" height="16" rx="2"></rect>
@@ -299,34 +659,34 @@ function renderDashboard(user) {
 
         <section class="stats-grid dashboard-stats-section">
           <article class="stat-card">
-            <span>Total Transactions</span>
+            <span>${t("totalTransactions")}</span>
             <strong>${summary.count}</strong>
           </article>
           <article class="stat-card">
-            <span>Total Amount</span>
+            <span>${t("totalAmount")}</span>
             <strong>${formatAmount(summary.amount)}</strong>
           </article>
           <article class="stat-card">
-            <span>ငွေထုတ် Amount</span>
+            <span>${t("withdrawAmount")}</span>
             <strong>${formatAmount(summary.byType["ငွေထုတ်"] ? summary.byType["ငွေထုတ်"].amount : 0)}</strong>
           </article>
           <article class="stat-card">
-            <span>ငွေသွင်း Amount</span>
+            <span>${t("depositAmount")}</span>
             <strong>${formatAmount(summary.byType["ငွေသွင်း"] ? summary.byType["ငွေသွင်း"].amount : 0)}</strong>
           </article>
           <article class="stat-card accent">
             <span>${escapeHtml(dateProfitLabel)}</span>
-            <strong>${isAdmin ? formatProfit(dateProfitSummary.profit) : "Admin Only"}</strong>
+            <strong>${isAdmin ? formatProfit(dateProfitSummary.profit) : t("adminOnly")}</strong>
           </article>
           ${isAdmin ? `
             <article class="stat-card accent total-profit-card">
-              <span>Total Profit</span>
+              <span>${t("totalProfit")}</span>
               <strong>${formatProfit(summary.profit)}</strong>
             </article>
           ` : `
             <article class="stat-card restricted total-profit-card">
-              <span>Total Profit</span>
-              <strong>Admin Only</strong>
+              <span>${t("totalProfit")}</span>
+              <strong>${t("adminOnly")}</strong>
             </article>
           `}
         </section>
@@ -334,16 +694,16 @@ function renderDashboard(user) {
         ${isAdmin ? `
           <section class="panel compact-panel profit-summary-section">
             <div class="section-heading">
-              <h2>Profit By Transaction Type</h2>
-              <p>Visible only to admin accounts.</p>
+              <h2>${t("profitByTransactionType")}</h2>
+              <p>${t("visibleOnlyAdmin")}</p>
             </div>
             <div class="type-summary-grid">
               <article class="type-card">
-                <span>ငွေထုတ် Profit</span>
+                <span>${t("withdrawProfit")}</span>
                 <strong>${formatProfit(summary.byType["ငွေထုတ်"] ? summary.byType["ငွေထုတ်"].profit : 0)}</strong>
               </article>
               <article class="type-card">
-                <span>ငွေသွင်း Profit</span>
+                <span>${t("depositProfit")}</span>
                 <strong>${formatProfit(summary.byType["ငွေသွင်း"] ? summary.byType["ငွေသွင်း"].profit : 0)}</strong>
               </article>
             </div>
@@ -352,51 +712,51 @@ function renderDashboard(user) {
 
         <section class="panel transaction-list-section">
           <div class="section-heading">
-            <h2>Transaction List</h2>
-            <p>The plus button creates new transactions with name, amount, and optional phone number.</p>
+            <h2>${t("transactionList")}</h2>
+            <p>${t("transactionListCopy")}</p>
           </div>
           <div class="table-toolbar">
             <div class="table-toolbar-filters">
               <div class="table-filter-group">
-                <button id="tableScopeToday" class="mini-button ${state.historyScope === "today" && !state.filterDate ? "active-filter" : ""}" type="button">Today</button>
-                <button id="tableScopeAllDates" class="mini-button ${state.historyScope === "all" && !state.filterDate ? "active-filter" : ""}" type="button">All Dates</button>
+                <button id="tableScopeToday" class="mini-button ${state.historyScope === "today" && !state.filterDate ? "active-filter" : ""}" type="button">${t("today")}</button>
+                <button id="tableScopeAllDates" class="mini-button ${state.historyScope === "all" && !state.filterDate ? "active-filter" : ""}" type="button">${t("allDates")}</button>
               </div>
               <div class="table-filter-group">
-                <button id="tableFilterAll" class="mini-button ${state.filterType === "all" ? "active-filter" : ""}" type="button">All</button>
-                <button id="tableFilterWithdraw" class="mini-button ${state.filterType === "ငွေထုတ်" ? "active-filter" : ""}" type="button">ငွေထုတ်</button>
-                <button id="tableFilterDeposit" class="mini-button ${state.filterType === "ငွေသွင်း" ? "active-filter" : ""}" type="button">ငွေသွင်း</button>
-                ${isAdmin ? `<button id="tableFilterDuplicated" class="mini-button ${state.filterType === "duplicated" ? "active-filter" : ""}" type="button">Duplicated</button>` : ""}
+                <button id="tableFilterAll" class="mini-button ${state.filterType === "all" ? "active-filter" : ""}" type="button">${t("all")}</button>
+                <button id="tableFilterWithdraw" class="mini-button ${state.filterType === "ငွေထုတ်" ? "active-filter" : ""}" type="button">${translateTransactionType("ငွေထုတ်")}</button>
+                <button id="tableFilterDeposit" class="mini-button ${state.filterType === "ငွေသွင်း" ? "active-filter" : ""}" type="button">${translateTransactionType("ငွေသွင်း")}</button>
+                ${isAdmin ? `<button id="tableFilterDuplicated" class="mini-button ${state.filterType === "duplicated" ? "active-filter" : ""}" type="button">${t("duplicated")}</button>` : ""}
               </div>
             </div>
             <div class="pagination-actions">
               <button id="paginationPrevButton" class="secondary-button pagination-arrow" type="button" aria-label="Previous page" ${pagination.currentPage === 1 ? "disabled" : ""}>${getPaginationArrowSvg("left")}</button>
               <div class="pagination-center-group">
                 <label class="pagination-input-group">
-                  <span>Page</span>
+                  <span>${t("page")}</span>
                   <input id="paginationPageInput" class="pagination-page-input" type="number" min="1" max="${pagination.totalPages}" value="${pagination.currentPage}">
                 </label>
-                <span class="pagination-page">of ${pagination.totalPages}</span>
+                <span class="pagination-page">${t("of")} ${pagination.totalPages}</span>
               </div>
               <button id="paginationNextButton" class="secondary-button pagination-arrow" type="button" aria-label="Next page" ${pagination.currentPage === pagination.totalPages ? "disabled" : ""}>${getPaginationArrowSvg("right")}</button>
             </div>
           </div>
           <p class="pagination-copy">
             ${pagination.totalItems
-              ? `Showing ${pagination.startItem}-${pagination.endItem} of ${pagination.totalItems} transactions`
-              : "No transactions to show"}
+              ? t("showingTransactions", { start: pagination.startItem, end: pagination.endItem, total: pagination.totalItems })
+              : t("noTransactionsToShow")}
           </p>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th class="column-date">Date</th>
-                  <th class="column-type">Type</th>
-                  <th class="column-name">Name</th>
-                  <th class="column-phone">Phone</th>
-                  <th class="column-amount">Amount</th>
-                  ${isAdmin ? "<th class=\"column-profit\">Profit</th>" : ""}
-                  <th class="column-created-by">Created By</th>
-                  <th class="column-action">Action</th>
+                  <th class="column-date">${t("date")}</th>
+                  <th class="column-type">${t("type")}</th>
+                  <th class="column-name">${t("name")}</th>
+                  <th class="column-phone">${t("phone")}</th>
+                  <th class="column-amount">${t("amount")}</th>
+                  ${isAdmin ? `<th class="column-profit">${t("profit")}</th>` : ""}
+                  <th class="column-created-by">${t("createdBy")}</th>
+                  <th class="column-action">${t("action")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -407,58 +767,58 @@ function renderDashboard(user) {
         </section>
       </main>
 
-      <button id="openModalButton" class="fab" type="button" aria-label="Create transaction">+</button>
+      <button id="openModalButton" class="fab" type="button" aria-label="${t("createTransactionTitle")}">+</button>
 
       <div class="modal-backdrop ${state.modalOpen ? "visible" : ""}" id="modalBackdrop">
         <section class="modal-card">
           <div class="modal-header">
             <div>
-              <p class="eyebrow dark">New Counter Transaction</p>
-              <h2>${state.editingId ? "Edit Transaction" : "Create Transaction"}</h2>
+              <p class="eyebrow dark">${t("newCounterTransaction")}</p>
+              <h2>${state.editingId ? t("editTransactionTitle") : t("createTransactionTitle")}</h2>
             </div>
-            <button id="closeModalButton" class="icon-button" type="button" aria-label="Close transaction modal">${getCloseIconSvg()}</button>
+            <button id="closeModalButton" class="icon-button" type="button" aria-label="${t("clear")}">${getCloseIconSvg()}</button>
           </div>
 
           <form id="transactionForm" class="modal-form">
             <input id="transactionId" type="hidden" value="${escapeHtml(state.editingId)}">
             <label>
-              <span>Transaction Type</span>
+              <span>${t("transactionType")}</span>
               <input id="transactionType" type="hidden" value="ငွေထုတ်">
-              <div class="type-toggle-group" role="radiogroup" aria-label="Transaction Type">
-                <button class="type-toggle-button active" data-transaction-type="ငွေထုတ်" aria-pressed="true" type="button">ငွေထုတ်</button>
-                <button class="type-toggle-button" data-transaction-type="ငွေသွင်း" aria-pressed="false" type="button">ငွေသွင်း</button>
+              <div class="type-toggle-group" role="radiogroup" aria-label="${t("transactionType")}">
+                <button class="type-toggle-button active" data-transaction-type="ငွေထုတ်" aria-pressed="true" type="button">${translateTransactionType("ငွေထုတ်")}</button>
+                <button class="type-toggle-button" data-transaction-type="ငွေသွင်း" aria-pressed="false" type="button">${translateTransactionType("ငွေသွင်း")}</button>
               </div>
             </label>
             <label>
-              <span>Name</span>
-              <input id="customerName" type="text" maxlength="40" required placeholder="Customer name">
+              <span>${t("customerName")}</span>
+              <input id="customerName" type="text" maxlength="40" required placeholder="${t("customerNamePlaceholder")}">
             </label>
             <label>
-              <span>Money (MMK)</span>
-              <input id="amount" type="text" inputmode="decimal" autocomplete="off" maxlength="15" required placeholder="Enter amount">
+              <span>${t("moneyMmk")}</span>
+              <input id="amount" type="text" inputmode="decimal" autocomplete="off" maxlength="15" required placeholder="${t("enterAmount")}">
             </label>
             <label>
-              <span>Phone Number (Optional)</span>
+              <span>${t("phoneOptional")}</span>
               <input id="phoneNumber" type="text" inputmode="numeric" autocomplete="tel" maxlength="11" placeholder="09xxxxxxxxx">
             </label>
             <div class="image-import-card">
               <div>
-                <span class="image-import-label">Image OCR Import</span>
-                <p class="image-import-copy">Upload a receipt or screenshot, or take a photo, and let the app create the transaction automatically.</p>
+                <span class="image-import-label">${t("imageOcrImport")}</span>
+                <p class="image-import-copy">${t("imageOcrCopy")}</p>
               </div>
               <div class="image-import-actions">
-                <button id="imageImportButton" class="secondary-button full-width" type="button">Upload Image</button>
-                <button id="cameraImportButton" class="secondary-button full-width" type="button">Take Photo</button>
+                <button id="imageImportButton" class="secondary-button full-width" type="button">${t("uploadImage")}</button>
+                <button id="cameraImportButton" class="secondary-button full-width" type="button">${t("takePhoto")}</button>
               </div>
               <input id="imageImportInput" class="visually-hidden-input" type="file" accept="image/*">
               <input id="cameraImportInput" class="visually-hidden-input" type="file" accept="image/*" capture="environment">
             </div>
             <div class="preview-card">
-              <span>Profit Rule Preview</span>
-              <strong id="profitPreview">${isAdmin ? "0.00 MMK" : "Admin Only"}</strong>
+              <span>${t("profitRulePreview")}</span>
+              <strong id="profitPreview">${isAdmin ? "0.00 MMK" : t("adminOnly")}</strong>
             </div>
             <p id="transactionMessage" class="form-message transaction-message-banner hidden" role="alert" aria-live="polite"></p>
-            <button class="primary-button full-width" type="submit">${state.editingId ? "Update Transaction" : "Save Transaction"}</button>
+            <button class="primary-button full-width" type="submit">${state.editingId ? t("updateTransaction") : t("saveTransaction")}</button>
           </form>
         </section>
       </div>
@@ -466,31 +826,32 @@ function renderDashboard(user) {
       ${renderDetailsModal(isAdmin)}
       ${renderDeleteConfirmModal()}
       ${renderDuplicateConfirmModal()}
+      </div>
     </div>
   `;
 }
 
 function renderTransactionRows(items, isAdmin) {
   if (!items.length) {
-    return `<tr class="empty-row"><td colspan="${isAdmin ? 8 : 7}">No transactions yet. Click the plus button to create one.</td></tr>`;
+    return `<tr class="empty-row"><td colspan="${isAdmin ? 8 : 7}">${t("noTransactionsYet")}</td></tr>`;
   }
 
   return items.map((tx) => `
     <tr>
-      <td class="column-date" data-label="Date">${escapeHtml(tx.createdAt)}</td>
-      <td class="column-type" data-label="Type"><span class="type-badge ${tx.type === "ငွေထုတ်" ? "withdraw" : "deposit"}">${escapeHtml(tx.type)}</span></td>
-      <td class="column-name" data-label="Name">
+      <td class="column-date" data-label="${t("date")}">${escapeHtml(tx.createdAt)}</td>
+      <td class="column-type" data-label="${t("type")}"><span class="type-badge ${tx.type === "ငွေထုတ်" ? "withdraw" : "deposit"}">${escapeHtml(translateTransactionType(tx.type))}</span></td>
+      <td class="column-name" data-label="${t("name")}">
         ${renderTransactionNameCell(tx, isAdmin)}
       </td>
-      <td class="column-phone" data-label="Phone">${escapeHtml(tx.phoneNumber || "-")}</td>
-      <td class="column-amount" data-label="Amount">${formatAmount(tx.amount)}</td>
-      ${isAdmin ? `<td class="column-profit money-positive" data-label="Profit">${formatProfit(tx.profit)}</td>` : ""}
-      <td class="column-created-by" data-label="Created By">${escapeHtml(tx.createdByName)}</td>
-      <td class="column-action" data-label="Action">
+      <td class="column-phone" data-label="${t("phone")}">${escapeHtml(tx.phoneNumber || "-")}</td>
+      <td class="column-amount" data-label="${t("amount")}">${formatAmount(tx.amount)}</td>
+      ${isAdmin ? `<td class="column-profit money-positive" data-label="${t("profit")}">${formatProfit(tx.profit)}</td>` : ""}
+      <td class="column-created-by" data-label="${t("createdBy")}">${escapeHtml(tx.createdByName)}</td>
+      <td class="column-action" data-label="${t("action")}">
         <div class="row-actions">
-          <button class="icon-action-button" data-action="details" data-id="${escapeHtml(tx.id)}" type="button" aria-label="View details" title="View details">${getActionIconSvg("details")}</button>
-          <button class="icon-action-button" data-action="edit" data-id="${escapeHtml(tx.id)}" type="button" aria-label="Edit transaction" title="Edit transaction">${getActionIconSvg("edit")}</button>
-          <button class="icon-action-button danger" data-action="delete" data-id="${escapeHtml(tx.id)}" type="button" aria-label="Delete transaction" title="Delete transaction">${getActionIconSvg("delete")}</button>
+          <button class="icon-action-button" data-action="details" data-id="${escapeHtml(tx.id)}" type="button" aria-label="${t("viewDetails")}" title="${t("viewDetails")}">${getActionIconSvg("details")}</button>
+          <button class="icon-action-button" data-action="edit" data-id="${escapeHtml(tx.id)}" type="button" aria-label="${t("editTransaction")}" title="${t("editTransaction")}">${getActionIconSvg("edit")}</button>
+          <button class="icon-action-button danger" data-action="delete" data-id="${escapeHtml(tx.id)}" type="button" aria-label="${t("deleteTransaction")}" title="${t("deleteTransaction")}">${getActionIconSvg("delete")}</button>
         </div>
       </td>
     </tr>
@@ -540,7 +901,7 @@ function renderDateFilterPopover() {
           ${getPaginationArrowSvg("left")}
         </button>
         <div class="date-popover-title">
-          <span>Date Filter</span>
+          <span>${t("dateFilter")}</span>
             <strong id="datePopoverLabel">${escapeHtml(label)}</strong>
         </div>
         <button id="calendarNextButton" class="icon-button date-nav-button" type="button" aria-label="Next month">
@@ -552,10 +913,10 @@ function renderDateFilterPopover() {
       </div>
         <div class="date-grid" id="dateGrid">
           ${buildCalendarDayButtons(viewYear, viewMonth)}
-        </div>
+      </div>
       <div class="date-popover-actions">
-        <button id="calendarClearButton" class="secondary-button ghost-button" type="button">Clear</button>
-        <button id="calendarTodayButton" class="secondary-button" type="button">Today</button>
+        <button id="calendarClearButton" class="secondary-button ghost-button" type="button">${t("clear")}</button>
+        <button id="calendarTodayButton" class="secondary-button" type="button">${t("today")}</button>
       </div>
     </div>
   `;
@@ -601,7 +962,6 @@ function bindAuthEvents() {
   const signupForm = document.getElementById("signupForm");
   const themeToggleAuth = document.getElementById("themeToggleAuth");
   const passwordToggles = document.querySelectorAll("[data-password-toggle]");
-
   document.querySelectorAll("[data-auth-tab]").forEach((button) => {
     button.addEventListener("click", () => {
       if (state.authTab === button.dataset.authTab) {
@@ -621,7 +981,7 @@ function bindAuthEvents() {
 
       const visible = input.type === "text";
       input.type = visible ? "password" : "text";
-      button.textContent = visible ? "Show" : "Hide";
+      button.textContent = visible ? t("show") : t("hide");
     });
   });
 
@@ -680,6 +1040,12 @@ function bindAuthEvents() {
   if (themeToggleAuth) {
     themeToggleAuth.addEventListener("click", toggleTheme);
   }
+
+  document.querySelectorAll("[data-language-switch]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setLanguage(button.dataset.languageSwitch);
+    });
+  });
 }
 
 function bindDashboardEvents() {
@@ -689,6 +1055,8 @@ function bindDashboardEvents() {
   }
 
   const headerLogoutButton = document.getElementById("headerLogoutButton");
+  const navbarMenuButton = document.getElementById("navbarMenuButton");
+  const navbarMeta = document.querySelector(".navbar-meta");
   const openModalButton = document.getElementById("openModalButton");
   const closeModalButton = document.getElementById("closeModalButton");
   const modalBackdrop = document.getElementById("modalBackdrop");
@@ -849,6 +1217,20 @@ function bindDashboardEvents() {
       event.stopImmediatePropagation();
       event.stopPropagation();
       toggleCalendarPopover();
+    });
+  }
+
+  if (navbarMenuButton) {
+    navbarMenuButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      state.navMenuOpen = !state.navMenuOpen;
+      render();
+    });
+  }
+
+  if (navbarMeta) {
+    navbarMeta.addEventListener("click", (event) => {
+      event.stopPropagation();
     });
   }
 
@@ -1048,8 +1430,17 @@ function bindDashboardEvents() {
   }
 
   if (themeToggleDashboard) {
-    themeToggleDashboard.addEventListener("click", toggleTheme);
+    themeToggleDashboard.addEventListener("click", () => {
+      state.navMenuOpen = false;
+      toggleTheme();
+    });
   }
+
+  document.querySelectorAll("[data-language-switch]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setLanguage(button.dataset.languageSwitch);
+    });
+  });
 
   typeToggleButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -1111,12 +1502,12 @@ function bindDashboardEvents() {
 
       imageImportButton && (imageImportButton.disabled = true);
       cameraImportButton && (cameraImportButton.disabled = true);
-      sourceButton.textContent = sourceButton === cameraImportButton ? "Opening camera..." : "Reading image...";
-      setTransactionMessage(message, "Scanning image and creating the transaction...");
+      sourceButton.textContent = sourceButton === cameraImportButton ? t("openingCamera") : t("readingImage");
+      setTransactionMessage(message, t("scanningImage"));
 
         try {
           const imagePayload = await prepareImageForUpload(file);
-          sourceButton.textContent = "Creating transaction...";
+          sourceButton.textContent = t("creatingTransaction");
           const payload = await api("/api/transactions/import-image", {
             method: "POST",
             body: JSON.stringify(imagePayload)
@@ -1127,13 +1518,13 @@ function bindDashboardEvents() {
           : (payload.draft ? [payload.draft] : []);
 
           if (!importedDrafts.length) {
-            throw new Error("No transaction details were found in that image.");
+            throw new Error(t("ocrNoDetails"));
           }
 
           const importedDraft = importedDrafts[0];
           if (!String(importedDraft.customerName || "").trim()) {
             applyImportedDraft(importedDraft);
-            setTransactionMessage(message, "OCR found the transaction, but the name was not clear. Please fill the name and save.");
+            setTransactionMessage(message, t("ocrNameUnclear"));
             return;
           }
 
@@ -1196,25 +1587,25 @@ function getDetailsModalContent(tx, isAdmin) {
     <section class="modal-card details-card">
       <div class="modal-header">
         <div>
-          <p class="eyebrow dark">Transaction Details</p>
+          <p class="eyebrow dark">${t("detailsTitle")}</p>
           <h2>${escapeHtml(tx.customerName)}</h2>
         </div>
-        <button id="closeDetailsButton" class="icon-button" type="button" aria-label="Close details">${getCloseIconSvg()}</button>
+        <button id="closeDetailsButton" class="icon-button" type="button" aria-label="${t("closeDetails")}">${getCloseIconSvg()}</button>
       </div>
       <div class="details-grid">
-        <div class="details-item"><span>Date</span><strong>${escapeHtml(tx.createdAt)}</strong></div>
-        <div class="details-item"><span>Type</span><strong>${escapeHtml(tx.type)}</strong></div>
-        <div class="details-item"><span>Name</span><strong>${escapeHtml(tx.customerName)}</strong></div>
-        <div class="details-item"><span>Phone</span><strong>${escapeHtml(tx.phoneNumber || "-")}</strong></div>
-        <div class="details-item"><span>Amount</span><strong>${formatAmount(tx.amount)}</strong></div>
-        ${isAdmin ? `<div class="details-item"><span>Profit</span><strong class="money-positive">${formatProfit(tx.profit)}</strong></div>` : ""}
+        <div class="details-item"><span>${t("date")}</span><strong>${escapeHtml(tx.createdAt)}</strong></div>
+        <div class="details-item"><span>${t("type")}</span><strong>${escapeHtml(translateTransactionType(tx.type))}</strong></div>
+        <div class="details-item"><span>${t("name")}</span><strong>${escapeHtml(tx.customerName)}</strong></div>
+        <div class="details-item"><span>${t("phone")}</span><strong>${escapeHtml(tx.phoneNumber || "-")}</strong></div>
+        <div class="details-item"><span>${t("amount")}</span><strong>${formatAmount(tx.amount)}</strong></div>
+        ${isAdmin ? `<div class="details-item"><span>${t("profit")}</span><strong class="money-positive">${formatProfit(tx.profit)}</strong></div>` : ""}
         ${isAdmin ? `
           <div class="details-item">
-            <span>Duplicate Status</span>
-            <strong class="${duplicateInfo ? "duplicate-text" : ""}">${duplicateInfo ? `Duplicate x${duplicateInfo.count}` : "No duplicate match"}</strong>
+            <span>${t("duplicateStatus")}</span>
+            <strong class="${duplicateInfo ? "duplicate-text" : ""}">${duplicateInfo ? `${t("duplicated")} x${duplicateInfo.count}` : t("noDuplicateMatch")}</strong>
           </div>
         ` : ""}
-        <div class="details-item"><span>Created By</span><strong>${escapeHtml(tx.createdByName)}</strong></div>
+        <div class="details-item"><span>${t("createdBy")}</span><strong>${escapeHtml(tx.createdByName)}</strong></div>
       </div>
     </section>
   `;
@@ -1339,17 +1730,17 @@ function getDeleteConfirmModalContent(tx) {
     <section class="modal-card confirm-card">
       <div class="modal-header">
         <div>
-          <p class="eyebrow dark">Delete Transaction</p>
-          <h2>Delete this transaction?</h2>
+          <p class="eyebrow dark">${t("deleteTransactionHeading")}</p>
+          <h2>${t("deleteQuestion")}</h2>
         </div>
         <button id="closeDeleteConfirmButton" class="icon-button" type="button" aria-label="Close delete confirmation">${getCloseIconSvg()}</button>
       </div>
       <p class="confirm-copy">
-        Are you sure you want to delete <strong>${escapeHtml(tx.customerName)}</strong> for <strong>${formatAmount(tx.amount)}</strong>?
+        ${t("deleteCopy", { name: escapeHtml(tx.customerName), amount: formatAmount(tx.amount) })}
       </p>
       <div class="confirm-actions">
-        <button id="cancelDeleteConfirmButton" class="secondary-button" type="button">Cancel</button>
-        <button id="confirmDeleteButton" class="secondary-button danger-button" type="button">Delete</button>
+        <button id="cancelDeleteConfirmButton" class="secondary-button" type="button">${t("cancel")}</button>
+        <button id="confirmDeleteButton" class="secondary-button danger-button" type="button">${t("delete")}</button>
       </div>
     </section>
   `;
@@ -1359,30 +1750,30 @@ function getDuplicateConfirmModalContent(pendingDuplicate) {
   const duplicate = pendingDuplicate.duplicate;
   const hasPhoneNumber = normalizePhoneNumber(pendingDuplicate.payload?.phoneNumber || duplicate.phoneNumber);
   const duplicateBasis = hasPhoneNumber
-    ? "same name, phone number, and amount"
-    : "same name, amount, and no phone number";
+    ? t("sameNamePhoneAmount")
+    : t("sameNameAmountNoPhone");
   return `
     <section class="modal-card confirm-card">
       <div class="modal-header">
         <div>
-          <p class="eyebrow dark">Duplicate Warning</p>
-          <h2>Possible duplicate transaction</h2>
+          <p class="eyebrow dark">${t("duplicateWarning")}</p>
+          <h2>${t("possibleDuplicate")}</h2>
         </div>
         <button id="closeDuplicateConfirmButton" class="icon-button" type="button" aria-label="Close duplicate warning">${getCloseIconSvg()}</button>
       </div>
       <p class="confirm-copy">
-        A transaction with the ${duplicateBasis} was already saved earlier on <strong>${escapeHtml(getTransactionDate(duplicate.createdAt))}</strong> at <strong>${escapeHtml(getTransactionTime(duplicate.createdAt))}</strong>.
+        ${t("duplicateCopy", { basis: duplicateBasis, date: escapeHtml(getTransactionDate(duplicate.createdAt)), time: escapeHtml(getTransactionTime(duplicate.createdAt)) })}
       </p>
       <div class="details-grid confirm-match-card">
-        <div class="details-item"><span>Name</span><strong>${escapeHtml(duplicate.customerName)}</strong></div>
-        <div class="details-item"><span>Phone</span><strong>${escapeHtml(duplicate.phoneNumber || "-")}</strong></div>
-        <div class="details-item"><span>Amount</span><strong>${formatAmount(duplicate.amount)}</strong></div>
-        <div class="details-item"><span>Created By</span><strong>${escapeHtml(duplicate.createdByName)}</strong></div>
+        <div class="details-item"><span>${t("name")}</span><strong>${escapeHtml(duplicate.customerName)}</strong></div>
+        <div class="details-item"><span>${t("phone")}</span><strong>${escapeHtml(duplicate.phoneNumber || "-")}</strong></div>
+        <div class="details-item"><span>${t("amount")}</span><strong>${formatAmount(duplicate.amount)}</strong></div>
+        <div class="details-item"><span>${t("createdBy")}</span><strong>${escapeHtml(duplicate.createdByName)}</strong></div>
       </div>
-      <p class="confirm-copy confirm-note">Continue only if this is really a new transaction.</p>
+      <p class="confirm-copy confirm-note">${t("continueOnlyIfNew")}</p>
       <div class="confirm-actions">
-        <button id="cancelDuplicateConfirmButton" class="secondary-button" type="button">Go Back</button>
-        <button id="confirmDuplicateButton" class="secondary-button danger-button" type="button">Save Anyway</button>
+        <button id="cancelDuplicateConfirmButton" class="secondary-button" type="button">${t("goBack")}</button>
+        <button id="confirmDuplicateButton" class="secondary-button danger-button" type="button">${t("saveAnyway")}</button>
       </div>
     </section>
   `;
@@ -1544,7 +1935,7 @@ function updateProfitPreview() {
   }
 
   if (!user || user.role !== "admin") {
-    preview.textContent = "Admin Only";
+    preview.textContent = t("adminOnly");
     return;
   }
 
@@ -1764,27 +2155,27 @@ async function submitTransactionForm({ allowDuplicate = false, draft = null } = 
   const message = document.getElementById("transactionMessage");
 
   if (!customerName) {
-    setTransactionMessage(message, "Name is required.");
+    setTransactionMessage(message, t("nameRequired"));
     return;
   }
 
   if (customerName.length > MAX_NAME_LENGTH) {
-    setTransactionMessage(message, `Name is too long. Please keep it within ${MAX_NAME_LENGTH} characters.`);
+    setTransactionMessage(message, t("nameTooLong", { count: MAX_NAME_LENGTH }));
     return;
   }
 
   if (amount <= 0) {
-    setTransactionMessage(message, "Amount must be greater than 0.");
+    setTransactionMessage(message, t("amountRequired"));
     return;
   }
 
   if (String(Math.trunc(amount)).length > MAX_AMOUNT_DIGITS) {
-    setTransactionMessage(message, `Amount is too large. Please keep it within ${MAX_AMOUNT_DIGITS} digits.`);
+    setTransactionMessage(message, t("amountTooLarge", { count: MAX_AMOUNT_DIGITS }));
     return;
   }
 
   if (phoneNumber && !isValidPhoneNumber(phoneNumber)) {
-    setTransactionMessage(message, "Phone number must start with 09 and have 9 to 11 digits.");
+    setTransactionMessage(message, t("phoneInvalid"));
     return;
   }
 
@@ -1814,6 +2205,11 @@ async function submitTransactionForm({ allowDuplicate = false, draft = null } = 
   } catch (error) {
     if (!state.editingId && error.status === 409 && error.payload?.duplicate) {
       if (error.payload.canOverride === false) {
+        if (error.payload.duplicatePolicy === "cashier-block") {
+          setTransactionMessage(message, t("cashierDuplicateBlocked"));
+          return;
+        }
+
         setTransactionMessage(message, error.message);
         return;
       }
@@ -1828,7 +2224,7 @@ async function submitTransactionForm({ allowDuplicate = false, draft = null } = 
 
 async function prepareImageForUpload(file) {
   if (!file.type.startsWith("image/")) {
-    throw new Error("Please upload an image file.");
+    throw new Error(t("uploadImageOnly"));
   }
 
   const image = await loadImageElement(file);
@@ -1843,7 +2239,7 @@ async function prepareImageForUpload(file) {
   const context = canvas.getContext("2d");
 
   if (!context) {
-    throw new Error("Image processing is not supported in this browser.");
+    throw new Error(t("imageProcessingUnsupported"));
   }
 
     context.drawImage(image, 0, 0, width, height);
@@ -2172,9 +2568,9 @@ function getDatePartsInAppTimeZone() {
 }
 
 function getDateProfitLabel() {
-  const baseLabel = state.filterDate
-    ? `Profit On ${state.filterDate}`
-    : `Profit On ${getTodayDatePrefix()}`;
+  const baseLabel = t("profitOn", {
+    date: state.filterDate || getTodayDatePrefix()
+  });
 
   if (state.filterTimeFrom || state.filterTimeTo) {
     return `${baseLabel} ${state.filterTimeFrom || "00:00"}-${state.filterTimeTo || "23:59"}`;
@@ -2263,12 +2659,12 @@ async function api(url, options = {}) {
       body: options.body
     });
   } catch (error) {
-    throw new Error("Cannot reach the server. Open the app from http://127.0.0.1:4173 or make sure npm start is running.");
+    throw new Error(t("serverUnreachable"));
   }
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(payload.message || "Request failed.");
+    const error = new Error(payload.message || t("requestFailed"));
     error.status = response.status;
     error.payload = payload;
     throw error;
@@ -2449,6 +2845,12 @@ document.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("click", () => {
+  if (state.navMenuOpen) {
+    state.navMenuOpen = false;
+    render();
+    return;
+  }
+
   if (state.calendarOpen) {
     closeCalendarPopover();
   }
