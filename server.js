@@ -177,13 +177,18 @@ async function handleApiRequest(req, res, url) {
     if (req.method === "POST") {
       const body = await readJsonBody(req);
       const type = String(body.type || "");
-      const customerName = String(body.customerName || "").trim();
+      const customerName = sanitizeCustomerName(body.customerName);
       const amount = toNumber(body.amount);
       const phoneNumber = String(body.phoneNumber || "").trim();
       const allowDuplicate = Boolean(body.allowDuplicate);
 
-      if (!customerName || !["ငွေထုတ်", "ငွေသွင်း"].includes(type)) {
+      if (!customerName || !isValidCustomerName(customerName) || !["ငွေထုတ်", "ငွေသွင်း"].includes(type)) {
         sendJson(res, 400, { message: "Valid transaction details are required." });
+        return;
+      }
+
+      if (needsCustomerNameSpaces(customerName)) {
+        sendJson(res, 400, { message: "Please add space btw words for the name." });
         return;
       }
 
@@ -324,12 +329,17 @@ async function handleApiRequest(req, res, url) {
       }
 
       const type = String(body.type || "");
-      const customerName = String(body.customerName || "").trim();
+      const customerName = sanitizeCustomerName(body.customerName);
       const amount = toNumber(body.amount);
       const phoneNumber = String(body.phoneNumber || "").trim();
 
-      if (!customerName || !["ငွေထုတ်", "ငွေသွင်း"].includes(type)) {
+      if (!customerName || !isValidCustomerName(customerName) || !["ငွေထုတ်", "ငွေသွင်း"].includes(type)) {
         sendJson(res, 400, { message: "Valid transaction details are required." });
+        return;
+      }
+
+      if (needsCustomerNameSpaces(customerName)) {
+        sendJson(res, 400, { message: "Please add space btw words for the name." });
         return;
       }
 
@@ -745,6 +755,23 @@ function sendJson(res, statusCode, payload) {
 
 function normalizeText(value) {
   return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function sanitizeCustomerName(value) {
+  return String(value || "")
+    .replace(/[^\p{L}\p{M}\s]/gu, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function isValidCustomerName(value) {
+  const normalized = String(value || "").trim();
+  return Boolean(normalized) && normalized === sanitizeCustomerName(normalized);
+}
+
+function needsCustomerNameSpaces(value) {
+  const normalized = String(value || "").trim();
+  return /^[\p{Script=Latin}\p{M}]{2,6}$/u.test(normalized);
 }
 
 function isValidPhoneNumber(value) {

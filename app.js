@@ -150,6 +150,8 @@ const translations = {
     profitOn: "Profit On {date}",
     nameRequired: "Name is required.",
     nameTooLong: "Name is too long. Please keep it within {count} characters.",
+    nameInvalid: "Name can only contain letters and spaces.",
+    nameNeedsSpaces: "Please add space btw words for the name.",
     amountRequired: "Amount must be greater than 0.",
     amountTooLarge: "Amount is too large. Please keep it within {count} digits.",
     phoneInvalid: "Phone number must start with 09 and have 9 to 11 digits.",
@@ -269,6 +271,8 @@ const translations = {
     profitOn: "{date} ရက် Profit",
     nameRequired: "အမည် လိုအပ်ပါသည်။",
     nameTooLong: "အမည်သည် အရမ်းရှည်နေပါသည်။ {count} လုံးအတွင်းသာ ထည့်ပါ။",
+    nameInvalid: "အမည်တွင် စာလုံးများနှင့် space များသာ ထည့်နိုင်ပါသည်။",
+    nameNeedsSpaces: "အမည်အတွက် စကားလုံးများကြား space ထည့်ပေးပါ။",
     amountRequired: "Amount သည် 0 ထက် ကြီးရပါမည်။",
     amountTooLarge: "Amount အရမ်းကြီးနေပါသည်။ {count} လုံးအတွင်းသာ ထည့်ပါ။",
     phoneInvalid: "ဖုန်းနံပါတ်သည် 09 ဖြင့် စပြီး 9 မှ 11 လုံးရှိရပါမည်။",
@@ -1463,6 +1467,13 @@ function bindDashboardEvents() {
     });
   }
 
+  const customerNameInput = document.getElementById("customerName");
+  if (customerNameInput) {
+    customerNameInput.addEventListener("input", () => {
+      customerNameInput.value = sanitizeCustomerName(customerNameInput.value);
+    });
+  }
+
   const phoneNumberInput = document.getElementById("phoneNumber");
   if (phoneNumberInput) {
     phoneNumberInput.addEventListener("input", () => {
@@ -1877,7 +1888,7 @@ function openEditModal(tx) {
 
       if (nextCustomerName && nextAmount && nextPhoneNumber) {
         setTransactionType(tx.type);
-        nextCustomerName.value = tx.customerName;
+        nextCustomerName.value = sanitizeCustomerName(tx.customerName);
         nextAmount.value = tx.amount;
         nextPhoneNumber.value = tx.phoneNumber || "";
         updateProfitPreview();
@@ -1894,7 +1905,7 @@ function openEditModal(tx) {
     transactionId.value = tx.id;
   }
   transactionType.value = tx.type;
-  customerName.value = tx.customerName;
+  customerName.value = sanitizeCustomerName(tx.customerName);
   amount.value = formatEditableAmount(String(tx.amount));
   phoneNumber.value = tx.phoneNumber || "";
   if (heading) {
@@ -2141,7 +2152,7 @@ function applyImportedDraft(draft) {
   const nextType = normalizeTransactionType(draft.type) || "ငွေထုတ်";
   typeInput.value = nextType;
   updateTransactionTypeButtons(nextType);
-  customerNameInput.value = String(draft.customerName || "").trim();
+  customerNameInput.value = sanitizeCustomerName(draft.customerName);
   amountInput.value = formatEditableAmount(String(draft.amount || ""));
   phoneNumberInput.value = String(draft.phoneNumber || "").replace(/\D/g, "").slice(0, MAX_PHONE_DIGITS);
   updateProfitPreview();
@@ -2149,7 +2160,7 @@ function applyImportedDraft(draft) {
 
 async function submitTransactionForm({ allowDuplicate = false, draft = null } = {}) {
   const type = draft?.type ?? document.getElementById("transactionType")?.value;
-  const customerName = draft?.customerName ?? document.getElementById("customerName")?.value.trim();
+  const customerName = sanitizeCustomerName(draft?.customerName ?? document.getElementById("customerName")?.value);
   const amount = draft?.amount ?? toNumber(document.getElementById("amount")?.value);
   const phoneNumber = draft?.phoneNumber ?? document.getElementById("phoneNumber")?.value.trim();
   const message = document.getElementById("transactionMessage");
@@ -2161,6 +2172,16 @@ async function submitTransactionForm({ allowDuplicate = false, draft = null } = 
 
   if (customerName.length > MAX_NAME_LENGTH) {
     setTransactionMessage(message, t("nameTooLong", { count: MAX_NAME_LENGTH }));
+    return;
+  }
+
+  if (!isValidCustomerName(customerName)) {
+    setTransactionMessage(message, t("nameInvalid"));
+    return;
+  }
+
+  if (needsCustomerNameSpaces(customerName)) {
+    setTransactionMessage(message, t("nameNeedsSpaces"));
     return;
   }
 
@@ -2744,6 +2765,24 @@ function escapeHtml(value) {
 
 function normalizeText(value) {
   return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function sanitizeCustomerName(value) {
+  return String(value || "")
+    .replace(/[^\p{L}\p{M}\s]/gu, "")
+    .replace(/\s{2,}/g, " ")
+    .trimStart()
+    .slice(0, MAX_NAME_LENGTH);
+}
+
+function isValidCustomerName(value) {
+  const normalized = String(value || "").trim();
+  return Boolean(normalized) && normalized === sanitizeCustomerName(normalized);
+}
+
+function needsCustomerNameSpaces(value) {
+  const normalized = String(value || "").trim();
+  return /^[\p{Script=Latin}\p{M}]{2,6}$/u.test(normalized);
 }
 
 function normalizePhoneNumber(value) {
