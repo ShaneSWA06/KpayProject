@@ -17,11 +17,14 @@ const state = {
   filterDate: "",
   filterTimeFrom: "",
   filterTimeTo: "",
+  reportDateFrom: "",
+  reportDateTo: "",
   pendingFilterTimeFrom: "",
   pendingFilterTimeTo: "",
   timeFilterDraftActive: false,
   timePickerOpen: "",
   calendarOpen: false,
+  calendarTarget: "filter",
   calendarMonth: "",
   historyScope: "today",
   filterType: "all",
@@ -76,6 +79,13 @@ const translations = {
     depositAmount: "Deposit Amount",
     adminOnly: "Admin Only",
     totalProfit: "Total Profit",
+    dateRangeReport: "Date Range Report",
+    dateRangeReportCopy: "Summary from {from} to {to}.",
+    reportDateFrom: "From Date",
+    reportDateTo: "To Date",
+    reportTransactions: "Transactions",
+    reportAmount: "Total Amount",
+    reportCashierCount: "Cashier Count",
     profitByTransactionType: "Profit By Transaction Type",
     visibleOnlyAdmin: "Visible only to admin accounts.",
     withdrawProfit: "Withdraw Profit",
@@ -197,6 +207,13 @@ const translations = {
     depositAmount: "ငွေသွင်း Amount",
     adminOnly: "Admin သီးသန့်",
     totalProfit: "စုစုပေါင်း Profit",
+    dateRangeReport: "ရက်အပိုင်းအခြား Report",
+    dateRangeReportCopy: "{from} မှ {to} အထိ transaction အားလုံး၏ အကျဉ်းချုပ်။",
+    reportDateFrom: "အစရက်",
+    reportDateTo: "အဆုံးရက်",
+    reportTransactions: "Transactions",
+    reportAmount: "စုစုပေါင်း Amount",
+    reportCashierCount: "Cashier အရေအတွက်",
     profitByTransactionType: "Transaction အမျိုးအစားအလိုက် Profit",
     visibleOnlyAdmin: "Admin account များသာ မြင်နိုင်ပါသည်။",
     withdrawProfit: "ငွေထုတ် Profit",
@@ -482,11 +499,11 @@ function getCloseIconSvg() {
 
 function getHamburgerIconSvg() {
   return `
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 7h16"></path>
-      <path d="M4 12h16"></path>
-      <path d="M4 17h16"></path>
-    </svg>
+    <span class="hamburger-lines" aria-hidden="true">
+      <span></span>
+      <span></span>
+      <span></span>
+    </span>
   `;
 }
 
@@ -591,6 +608,7 @@ function renderAuth() {
 }
 
 function renderDashboard(user) {
+  ensureReportDateRange();
   const visibleTransactions = getVisibleTransactions();
   const pagination = getPaginationState(visibleTransactions.length);
   const paginatedTransactions = visibleTransactions.slice(pagination.startIndex, pagination.endIndex);
@@ -599,6 +617,9 @@ function renderDashboard(user) {
   const closingSummary = summarizeClosingTransactions(getClosingSummaryTransactions(state.transactions));
   const closingSummaryLabel = getClosingSummaryLabel();
   const dateProfitLabel = getDateProfitLabel();
+  const rangeReportTransactions = getRangeReportTransactions(state.transactions);
+  const rangeReportSummary = summarizeClosingTransactions(rangeReportTransactions);
+  const rangeReportLabel = getRangeReportLabel();
   const isAdmin = user.role === "admin";
 
   return `
@@ -606,7 +627,7 @@ function renderDashboard(user) {
       <div class="dashboard-navbar-shell">
       <header class="dashboard-navbar">
         <div class="navbar-brand">${renderBrandLockup()}</div>
-        <button id="navbarMenuButton" class="navbar-menu-button" type="button" aria-label="Toggle navigation menu" aria-expanded="${state.navMenuOpen ? "true" : "false"}">
+        <button id="navbarMenuButton" class="navbar-menu-button ${state.navMenuOpen ? "active" : ""}" type="button" aria-label="Toggle navigation menu" aria-expanded="${state.navMenuOpen ? "true" : "false"}">
           ${getHamburgerIconSvg()}
         </button>
         <div class="navbar-meta ${state.navMenuOpen ? "menu-open" : ""}">
@@ -645,6 +666,7 @@ function renderDashboard(user) {
                 id="dateFilterToggleButton"
                 class="icon-button date-filter-toggle ${state.filterDate ? "active" : ""}"
                 type="button"
+                data-calendar-toggle="filter"
                 aria-label="${state.filterDate ? t("changeDateFilterFrom", { date: escapeHtml(state.filterDate) }) : t("openDateFilter")}"
                 title="${state.filterDate ? t("dateFilterTitle", { date: escapeHtml(state.filterDate) }) : t("filterByDate")}"
               >
@@ -655,8 +677,7 @@ function renderDashboard(user) {
                   <path d="M3 10h18"></path>
                 </svg>
               </button>
-              <input id="dateFilterInput" class="date-filter-input" type="hidden" value="${escapeHtml(state.filterDate)}">
-              ${renderDateFilterPopover()}
+              ${renderDateFilterPopover("filter")}
             </div>
           </div>
         </header>
@@ -694,6 +715,58 @@ function renderDashboard(user) {
             </article>
           `}
         </section>
+
+        ${isAdmin ? `
+          <section class="panel compact-panel range-summary-section">
+            <div class="section-heading">
+              <h2>${t("dateRangeReport")}</h2>
+              <p>${escapeHtml(rangeReportLabel)}</p>
+            </div>
+            <div class="report-range-toolbar">
+              <label class="report-date-field">
+                <span>${t("reportDateFrom")}</span>
+                <div class="date-filter-shell report-date-shell">
+                  <button id="reportDateFromButton" class="secondary-button report-date-button" type="button" data-calendar-toggle="reportFrom">${escapeHtml(state.reportDateFrom)}</button>
+                  ${renderDateFilterPopover("reportFrom")}
+                </div>
+              </label>
+              <label class="report-date-field">
+                <span>${t("reportDateTo")}</span>
+                <div class="date-filter-shell report-date-shell">
+                  <button id="reportDateToButton" class="secondary-button report-date-button" type="button" data-calendar-toggle="reportTo">${escapeHtml(state.reportDateTo)}</button>
+                  ${renderDateFilterPopover("reportTo")}
+                </div>
+              </label>
+              <button id="reportDateResetButton" class="secondary-button ghost-button report-date-reset" type="button">${t("today")}</button>
+            </div>
+            <div class="closing-summary-grid">
+              <article class="type-card">
+                <span>${t("reportTransactions")}</span>
+                <strong>${rangeReportSummary.openingCount}</strong>
+              </article>
+              <article class="type-card">
+                <span>${t("reportAmount")}</span>
+                <strong>${formatAmount(rangeReportSummary.totalDeposit + rangeReportSummary.totalWithdraw)}</strong>
+              </article>
+              <article class="type-card">
+                <span>${t("depositAmount")}</span>
+                <strong>${formatAmount(rangeReportSummary.totalDeposit)}</strong>
+              </article>
+              <article class="type-card">
+                <span>${t("withdrawAmount")}</span>
+                <strong>${formatAmount(rangeReportSummary.totalWithdraw)}</strong>
+              </article>
+              <article class="type-card">
+                <span>${t("totalProfit")}</span>
+                <strong>${formatProfit(rangeReportSummary.totalProfit)}</strong>
+              </article>
+              <article class="type-card">
+                <span>${t("reportCashierCount")}</span>
+                <strong>${rangeReportSummary.cashierCount}</strong>
+              </article>
+            </div>
+          </section>
+        ` : ""}
 
         ${isAdmin ? `
           <section class="panel compact-panel profit-summary-section">
@@ -888,7 +961,7 @@ function renderDuplicateConfirmModal() {
   `;
 }
 
-function renderDateFilterPopover() {
+function renderDateFilterPopover(target) {
   const viewDate = getCalendarViewDate();
   const viewYear = viewDate.getUTCFullYear();
   const viewMonth = viewDate.getUTCMonth();
@@ -899,31 +972,45 @@ function renderDateFilterPopover() {
   });
 
   return `
-    <div class="date-popover ${state.calendarOpen ? "visible" : ""}" id="dateFilterPopover">
+    <div class="date-popover ${state.calendarOpen && state.calendarTarget === target ? "visible" : ""}" id="datePopover-${target}" data-calendar-popover="${target}">
       <div class="date-popover-header">
-        <button id="calendarPrevButton" class="icon-button date-nav-button" type="button" aria-label="Previous month">
+        <button class="icon-button date-nav-button" type="button" data-calendar-nav="prev" aria-label="Previous month">
           ${getPaginationArrowSvg("left")}
         </button>
         <div class="date-popover-title">
-          <span>${t("dateFilter")}</span>
-            <strong id="datePopoverLabel">${escapeHtml(label)}</strong>
+          <span>${escapeHtml(getCalendarPopoverTitle(target))}</span>
+            <strong data-calendar-label="${target}">${escapeHtml(label)}</strong>
         </div>
-        <button id="calendarNextButton" class="icon-button date-nav-button" type="button" aria-label="Next month">
+        <button class="icon-button date-nav-button" type="button" data-calendar-nav="next" aria-label="Next month">
           ${getPaginationArrowSvg("right")}
         </button>
       </div>
       <div class="date-weekdays">
         <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
       </div>
-        <div class="date-grid" id="dateGrid">
-          ${buildCalendarDayButtons(viewYear, viewMonth)}
+        <div class="date-grid" data-calendar-grid="${target}">
+          ${buildCalendarDayButtons(viewYear, viewMonth, target)}
       </div>
       <div class="date-popover-actions">
-        <button id="calendarClearButton" class="secondary-button ghost-button" type="button">${t("clear")}</button>
-        <button id="calendarTodayButton" class="secondary-button" type="button">${t("today")}</button>
+        <button class="secondary-button ghost-button" type="button" data-calendar-action="clear">${t("clear")}</button>
+        <button class="secondary-button" type="button" data-calendar-action="today">${t("today")}</button>
       </div>
     </div>
   `;
+}
+
+function syncNavMenuUi() {
+  const navbarMenuButton = document.getElementById("navbarMenuButton");
+  const navbarMeta = document.querySelector(".navbar-meta");
+
+  if (navbarMenuButton) {
+    navbarMenuButton.classList.toggle("active", state.navMenuOpen);
+    navbarMenuButton.setAttribute("aria-expanded", String(state.navMenuOpen));
+  }
+
+  if (navbarMeta) {
+    navbarMeta.classList.toggle("menu-open", state.navMenuOpen);
+  }
 }
 
 function getActionIconSvg(type) {
@@ -1076,12 +1163,9 @@ function bindDashboardEvents() {
   const timeFilterTo = document.getElementById("timeFilterTo");
   const clearTimeFilterButton = document.getElementById("clearTimeFilterButton");
   const dateFilterToggleButton = document.getElementById("dateFilterToggleButton");
-  const dateFilterInput = document.getElementById("dateFilterInput");
-  const dateFilterPopover = document.getElementById("dateFilterPopover");
-  const calendarPrevButton = document.getElementById("calendarPrevButton");
-  const calendarNextButton = document.getElementById("calendarNextButton");
-  const calendarTodayButton = document.getElementById("calendarTodayButton");
-  const calendarClearButton = document.getElementById("calendarClearButton");
+  const reportDateFromButton = document.getElementById("reportDateFromButton");
+  const reportDateToButton = document.getElementById("reportDateToButton");
+  const reportDateResetButton = document.getElementById("reportDateResetButton");
   const themeToggleDashboard = document.getElementById("themeToggleDashboard");
   const imageImportButton = document.getElementById("imageImportButton");
   const imageImportInput = document.getElementById("imageImportInput");
@@ -1220,7 +1304,7 @@ function bindDashboardEvents() {
     dateFilterToggleButton.addEventListener("click", (event) => {
       event.stopImmediatePropagation();
       event.stopPropagation();
-      toggleCalendarPopover();
+      toggleCalendarPopover("filter");
     });
   }
 
@@ -1228,7 +1312,7 @@ function bindDashboardEvents() {
     navbarMenuButton.addEventListener("click", (event) => {
       event.stopPropagation();
       state.navMenuOpen = !state.navMenuOpen;
-      render();
+      syncNavMenuUi();
     });
   }
 
@@ -1238,8 +1322,8 @@ function bindDashboardEvents() {
     });
   }
 
-  if (dateFilterPopover) {
-    dateFilterPopover.addEventListener("click", (event) => {
+  document.querySelectorAll("[data-calendar-popover]").forEach((popover) => {
+    popover.addEventListener("click", (event) => {
       event.stopImmediatePropagation();
       event.stopPropagation();
 
@@ -1248,32 +1332,50 @@ function bindDashboardEvents() {
         return;
       }
 
-      if (target.id === "calendarPrevButton") {
+      if (target.dataset.calendarNav === "prev") {
         state.calendarMonth = shiftCalendarMonth(-1);
         syncCalendarControls();
         return;
       }
 
-      if (target.id === "calendarNextButton") {
+      if (target.dataset.calendarNav === "next") {
         state.calendarMonth = shiftCalendarMonth(1);
         syncCalendarControls();
         return;
       }
 
-      if (target.id === "calendarTodayButton") {
-        applyDateFilter(getTodayDatePrefix());
+      if (target.dataset.calendarAction === "today") {
+        applyCalendarSelection(getTodayDatePrefix());
         return;
       }
 
-      if (target.id === "calendarClearButton") {
-        clearDateFilter();
+      if (target.dataset.calendarAction === "clear") {
+        clearCalendarSelection();
         return;
       }
 
       if (target.dataset.calendarDate) {
-        applyDateFilter(target.dataset.calendarDate);
+        applyCalendarSelection(target.dataset.calendarDate);
       }
     });
+  });
+
+  if (reportDateFromButton) {
+    reportDateFromButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleCalendarPopover("reportFrom");
+    });
+  }
+
+  if (reportDateToButton) {
+    reportDateToButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleCalendarPopover("reportTo");
+    });
+  }
+
+  if (reportDateResetButton) {
+    reportDateResetButton.addEventListener("click", resetReportDateRange);
   }
 
   if (timeFilterFrom) {
@@ -1567,10 +1669,12 @@ function closeModal() {
   render();
 }
 
-function toggleCalendarPopover() {
-  state.calendarOpen = !state.calendarOpen;
+function toggleCalendarPopover(target = "filter") {
+  const nextOpen = !(state.calendarOpen && state.calendarTarget === target);
+  state.calendarOpen = nextOpen;
+  state.calendarTarget = target;
   if (state.calendarOpen) {
-    syncCalendarMonth();
+    syncCalendarMonth(target);
   }
   syncCalendarControls();
 }
@@ -2010,6 +2114,18 @@ function renderTimeFilterPopover(edge, selectedValue) {
   `;
 }
 
+function getCalendarPopoverTitle(target) {
+  if (target === "reportFrom") {
+    return t("reportDateFrom");
+  }
+
+  if (target === "reportTo") {
+    return t("reportDateTo");
+  }
+
+  return t("dateFilter");
+}
+
 function buildTimeFilterOptions(edge, selectedValue) {
   const options = [];
   for (let hour = 0; hour < 24; hour += 1) {
@@ -2039,12 +2155,28 @@ function getDisplayedTimeFilterValue(edge) {
   return state.pendingFilterTimeTo || state.filterTimeTo;
 }
 
+function getCalendarSelectionValue(target = state.calendarTarget) {
+  if (target === "reportFrom") {
+    return state.reportDateFrom;
+  }
+
+  if (target === "reportTo") {
+    return state.reportDateTo;
+  }
+
+  return state.filterDate;
+}
+
+function getCalendarRangeSelection() {
+  const range = getNormalizedReportDateRange();
+  return {
+    from: range.from,
+    to: range.to
+  };
+}
+
 function syncCalendarControls() {
   const toggleButton = document.getElementById("dateFilterToggleButton");
-  const hiddenInput = document.getElementById("dateFilterInput");
-  const popover = document.getElementById("dateFilterPopover");
-  const label = document.getElementById("datePopoverLabel");
-  const grid = document.getElementById("dateGrid");
 
   if (toggleButton) {
     toggleButton.classList.toggle("active", Boolean(state.filterDate));
@@ -2054,25 +2186,39 @@ function syncCalendarControls() {
     toggleButton.setAttribute("title", title);
   }
 
-  if (hiddenInput) {
-    hiddenInput.value = state.filterDate;
-  }
-
-  if (popover) {
-    popover.classList.toggle("visible", state.calendarOpen);
-  }
-
   const viewDate = getCalendarViewDate();
-  if (label) {
-    label.textContent = viewDate.toLocaleString("en-US", {
-      month: "long",
-      year: "numeric",
-      timeZone: "UTC"
-    });
-  }
+  const nextLabel = viewDate.toLocaleString("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC"
+  });
 
-  if (grid) {
-    grid.innerHTML = buildCalendarDayButtons(viewDate.getUTCFullYear(), viewDate.getUTCMonth());
+  document.querySelectorAll("[data-calendar-popover]").forEach((popover) => {
+    const target = popover.dataset.calendarPopover;
+    popover.classList.toggle("visible", state.calendarOpen && state.calendarTarget === target);
+  });
+
+  document.querySelectorAll("[data-calendar-label]").forEach((label) => {
+    label.textContent = nextLabel;
+  });
+
+  document.querySelectorAll("[data-calendar-grid]").forEach((grid) => {
+    grid.innerHTML = buildCalendarDayButtons(
+      viewDate.getUTCFullYear(),
+      viewDate.getUTCMonth(),
+      grid.dataset.calendarGrid
+    );
+  });
+
+  const reportFromButton = document.getElementById("reportDateFromButton");
+  const reportToButton = document.getElementById("reportDateToButton");
+  if (reportFromButton) {
+    reportFromButton.textContent = state.reportDateFrom;
+    reportFromButton.classList.toggle("active", state.calendarOpen && state.calendarTarget === "reportFrom");
+  }
+  if (reportToButton) {
+    reportToButton.textContent = state.reportDateTo;
+    reportToButton.classList.toggle("active", state.calendarOpen && state.calendarTarget === "reportTo");
   }
 }
 
@@ -2365,12 +2511,12 @@ function getVisibleTransactions() {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-function syncCalendarMonth() {
-  state.calendarMonth = (state.filterDate || getTodayDatePrefix()).slice(0, 7);
+function syncCalendarMonth(target = state.calendarTarget) {
+  state.calendarMonth = (getCalendarSelectionValue(target) || getTodayDatePrefix()).slice(0, 7);
 }
 
 function getCalendarViewDate() {
-  const monthValue = state.calendarMonth || (state.filterDate || getTodayDatePrefix()).slice(0, 7);
+  const monthValue = state.calendarMonth || (getCalendarSelectionValue() || getTodayDatePrefix()).slice(0, 7);
   const match = monthValue.match(/^(\d{4})-(\d{2})$/);
 
   if (!match) {
@@ -2386,12 +2532,13 @@ function shiftCalendarMonth(offset) {
   return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-function buildCalendarDayButtons(year, month) {
+function buildCalendarDayButtons(year, month, target = state.calendarTarget) {
   const firstDay = new Date(Date.UTC(year, month, 1));
   const startWeekday = firstDay.getUTCDay();
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
   const today = getTodayDatePrefix();
-  const selectedDate = state.filterDate;
+  const selectedDate = getCalendarSelectionValue(target);
+  const range = target === "filter" ? null : getCalendarRangeSelection();
   const cells = [];
 
   for (let index = 0; index < startWeekday; index += 1) {
@@ -2402,9 +2549,24 @@ function buildCalendarDayButtons(year, month) {
       const isoDate = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
       const classes = ["date-day"];
       const isFuture = isoDate > today;
+      const isRangeStart = range && isoDate === range.from;
+      const isRangeEnd = range && isoDate === range.to;
+      const isInRange = range && isoDate >= range.from && isoDate <= range.to;
 
     if (selectedDate === isoDate) {
         classes.push("selected");
+      }
+
+    if (isInRange) {
+        classes.push("in-range");
+      }
+
+    if (isRangeStart) {
+        classes.push("range-start");
+      }
+
+    if (isRangeEnd) {
+        classes.push("range-end");
       }
 
     if (today === isoDate) {
@@ -2423,6 +2585,35 @@ function buildCalendarDayButtons(year, month) {
     }
 
   return cells.join("");
+}
+
+function applyCalendarSelection(value) {
+  if (state.calendarTarget === "reportFrom") {
+    applyReportDateRange("from", value);
+    return;
+  }
+
+  if (state.calendarTarget === "reportTo") {
+    applyReportDateRange("to", value);
+    return;
+  }
+
+  applyDateFilter(value);
+}
+
+function clearCalendarSelection() {
+  if (state.calendarTarget === "reportFrom") {
+    const baseDate = state.reportDateTo || getTodayDatePrefix();
+    applyReportDateRange("from", `${baseDate.slice(0, 7)}-01`);
+    return;
+  }
+
+  if (state.calendarTarget === "reportTo") {
+    applyReportDateRange("to", getTodayDatePrefix());
+    return;
+  }
+
+  clearDateFilter();
 }
 
 function applyDateFilter(value) {
@@ -2605,6 +2796,63 @@ function getClosingSummaryTransactions(items) {
   return items.filter((tx) => getTransactionDate(tx.createdAt) === targetDate && isTransactionWithinTimeFilter(tx.createdAt));
 }
 
+function ensureReportDateRange() {
+  if (state.reportDateFrom && state.reportDateTo) {
+    return;
+  }
+
+  const today = getTodayDatePrefix();
+  const baseDate = state.filterDate || today;
+  state.reportDateTo = state.reportDateTo || baseDate;
+  state.reportDateFrom = state.reportDateFrom || `${baseDate.slice(0, 7)}-01`;
+}
+
+function getNormalizedReportDateRange() {
+  ensureReportDateRange();
+  if (state.reportDateTo < state.reportDateFrom) {
+    return {
+      from: state.reportDateTo,
+      to: state.reportDateFrom
+    };
+  }
+
+  return {
+    from: state.reportDateFrom,
+    to: state.reportDateTo
+  };
+}
+
+function applyReportDateRange(edge, value) {
+  if (!value) {
+    return;
+  }
+
+  if (edge === "from") {
+    state.reportDateFrom = value;
+  } else {
+    state.reportDateTo = value;
+  }
+
+  state.currentPage = 1;
+  render();
+}
+
+function resetReportDateRange() {
+  const today = getTodayDatePrefix();
+  state.reportDateFrom = `${today.slice(0, 7)}-01`;
+  state.reportDateTo = today;
+  state.currentPage = 1;
+  render();
+}
+
+function getRangeReportTransactions(items) {
+  const range = getNormalizedReportDateRange();
+  return items.filter((tx) => {
+    const txDate = getTransactionDate(tx.createdAt);
+    return txDate >= range.from && txDate <= range.to && isTransactionWithinTimeFilter(tx.createdAt);
+  });
+}
+
 function summarizeClosingTransactions(items) {
   const cashierIds = new Set();
 
@@ -2648,6 +2896,11 @@ function getClosingSummaryLabel() {
   }
 
   return baseLabel;
+}
+
+function getRangeReportLabel() {
+  const range = getNormalizedReportDateRange();
+  return t("dateRangeReportCopy", { from: range.from, to: range.to });
 }
 
 async function hydrateSession() {
@@ -2886,7 +3139,7 @@ document.addEventListener("keydown", (event) => {
 document.addEventListener("click", () => {
   if (state.navMenuOpen) {
     state.navMenuOpen = false;
-    render();
+    syncNavMenuUi();
     return;
   }
 
