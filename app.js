@@ -407,13 +407,21 @@ function renderLanguageSelect(selectId) {
   const isEnglish = state.language === "en";
   return `
     <div id="${selectId}" class="language-switch-shell ${isEnglish ? "english-active" : "myanmar-active"}" role="group" aria-label="Language">
-      <button class="language-orbit-button language-orbit-button-myanmar ${state.language === "my" ? "active" : ""}" data-language-switch="my" type="button" aria-pressed="${state.language === "my"}" title="${t("languageBurmese")}">
-        <span class="language-flag-orbit myanmar-orbit-flag">
+      <span class="language-switch-thumb" aria-hidden="true">
+        <span class="language-switch-thumb-flag language-switch-thumb-flag-myanmar">
+          <span class="language-flag myanmar-flag"></span>
+        </span>
+        <span class="language-switch-thumb-flag language-switch-thumb-flag-english">
+          <span class="language-flag english-flag"></span>
+        </span>
+      </span>
+      <button class="language-switch-option language-switch-option-myanmar ${state.language === "my" ? "active" : ""}" data-language-switch="my" type="button" aria-pressed="${state.language === "my"}" title="${t("languageBurmese")}">
+        <span class="language-switch-option-flag">
           <span class="language-flag myanmar-flag"></span>
         </span>
       </button>
-      <button class="language-orbit-button language-orbit-button-english ${state.language === "en" ? "active" : ""}" data-language-switch="en" type="button" aria-pressed="${state.language === "en"}" title="${t("languageEnglish")}">
-        <span class="language-flag-orbit english-orbit-flag">
+      <button class="language-switch-option language-switch-option-english ${state.language === "en" ? "active" : ""}" data-language-switch="en" type="button" aria-pressed="${state.language === "en"}" title="${t("languageEnglish")}">
+        <span class="language-switch-option-flag">
           <span class="language-flag english-flag"></span>
         </span>
       </button>

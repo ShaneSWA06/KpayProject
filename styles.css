@@ -330,82 +330,91 @@ body[data-theme="dark"] .hero-points div {
 
 .language-switch-shell {
   position: relative;
-  display: inline-block;
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
   width: 86px;
   min-width: 86px;
-  height: 42px;
+  height: 40px;
   padding: 3px;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   border-radius: 999px;
-  background: var(--surface);
-  overflow: visible;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, white 6%), color-mix(in srgb, var(--surface-2) 92%, transparent));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 6px 14px rgba(18, 22, 27, 0.08);
+  overflow: hidden;
   isolation: isolate;
 }
 
-.language-orbit-button {
+.language-switch-thumb {
   position: absolute;
-  top: 50%;
-  width: 40px;
-  height: 40px;
+  top: 3px;
+  left: 3px;
+  width: 36px;
+  height: 32px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 30% 28%, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.88) 58%, rgba(238, 242, 245, 0.92) 100%);
+  box-shadow:
+    0 6px 14px rgba(18, 22, 27, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 1;
+}
+
+.language-switch-shell.english-active .language-switch-thumb {
+  transform: translateX(40px);
+}
+
+.language-switch-thumb-flag {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.language-switch-shell.myanmar-active .language-switch-thumb-flag-myanmar,
+.language-switch-shell.english-active .language-switch-thumb-flag-english {
+  opacity: 1;
+}
+
+.language-switch-option {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
   padding: 0;
   border: none;
   background: transparent;
   cursor: pointer;
-  transform: translate(-50%, -50%);
-  transition: left 0.28s ease, transform 0.28s ease, opacity 0.28s ease;
+  transition: opacity 0.2s ease;
 }
 
-.language-orbit-button:hover {
-  transform: translate(-50%, -50%);
-}
-
-.language-orbit-button.active {
-  z-index: 2;
-}
-
-.language-switch-shell.myanmar-active .language-orbit-button-myanmar {
-  left: 28%;
-  transform: translate(-50%, -50%) scale(1.06);
-}
-
-.language-switch-shell.myanmar-active .language-orbit-button-english {
-  left: 72%;
-  opacity: 0.82;
-  transform: translate(-50%, -50%) scale(0.88);
-}
-
-.language-switch-shell.english-active .language-orbit-button-myanmar {
-  left: 28%;
-  opacity: 0.82;
-  transform: translate(-50%, -50%) scale(0.88);
-}
-
-.language-switch-shell.english-active .language-orbit-button-english {
-  left: 72%;
-  transform: translate(-50%, -50%) scale(1.06);
-}
-
-.language-flag-orbit {
+.language-switch-option-flag {
+  width: 100%;
+  height: 100%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.54));
-  border: 1px solid rgba(31, 111, 120, 0.18);
-  box-shadow: 0 6px 14px rgba(31, 111, 120, 0.14);
-  transition: transform 0.28s ease, box-shadow 0.28s ease, opacity 0.28s ease;
+}
+
+.language-switch-option.active {
+  pointer-events: none;
 }
 
 .language-flag {
   display: inline-flex;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 999px;
   border: 1px solid rgba(45, 36, 29, 0.12);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
-  transition: transform 0.24s ease;
+  transition: transform 0.24s ease, opacity 0.2s ease;
 }
 
 .myanmar-flag {
@@ -424,12 +433,12 @@ body[data-theme="dark"] .hero-points div {
     #21468b;
 }
 
-.language-orbit-button.active .language-flag-orbit {
-  box-shadow: 0 8px 18px rgba(31, 111, 120, 0.18);
+.language-switch-option.active .language-flag {
+  opacity: 0;
 }
 
-.language-orbit-button.active .language-flag {
-  transform: scale(1.08);
+.language-switch-thumb .language-flag {
+  transform: scale(1.02);
 }
 
 .auth-tabs {
