@@ -26,6 +26,10 @@ const pool = new Pool({
   connectionString: databaseUrl
 });
 
+pool.on("error", (error) => {
+  console.error("[db] Unexpected idle client error", error);
+});
+
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
@@ -48,6 +52,9 @@ async function start() {
     });
   });
 
+  server.keepAliveTimeout = 65_000;
+  server.headersTimeout = 66_000;
+
   server.listen(PORT, HOST, () => {
     console.log(`Kpay/WavePay app running at http://${HOST}:${PORT}`);
   });
@@ -66,7 +73,8 @@ async function handleRequest(req, res) {
 
 async function handleApiRequest(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/health") {
-    sendJson(res, 200, { ok: true });
+    const health = await getHealthStatus();
+    sendJson(res, health.ok ? 200 : 503, health);
     return;
   }
 
@@ -472,6 +480,29 @@ async function initializeDatabase() {
         nowStamp()
       ]
     );
+  }
+}
+
+async function getHealthStatus() {
+  const startedAt = process.uptime();
+
+  try {
+    await pool.query("SELECT 1");
+    return {
+      ok: true,
+      database: "ok",
+      uptimeSeconds: Math.floor(startedAt),
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error("[health] Database health check failed", error);
+    return {
+      ok: false,
+      database: "error",
+      uptimeSeconds: Math.floor(startedAt),
+      timestamp: new Date().toISOString(),
+      message: "Database health check failed."
+    };
   }
 }
 
@@ -1676,6 +1707,26 @@ function parseStampToUtcMs(value) {
   const [, year, month, day, hour, minute] = match;
   return Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
 }
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[process] Unhandled promise rejection", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("[process] Uncaught exception", error);
+  process.exit(1);
+});
+
+process.on("SIGTERM", async () => {
+  console.log("[process] SIGTERM received, closing database pool");
+  try {
+    await pool.end();
+  } catch (error) {
+    console.error("[process] Failed to close database pool on SIGTERM", error);
+  } finally {
+    process.exit(0);
+  }
+});
 
 start().catch((error) => {
   console.error(error);
