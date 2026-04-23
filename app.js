@@ -45,6 +45,7 @@ const duplicateIndexCache = {
   counts: new Map()
 };
 let languageSwitchRenderTimer = 0;
+let languagePickerEventsBound = false;
 
 const translations = {
   en: {
@@ -339,15 +340,28 @@ function saveLanguage(value) {
 }
 
 function syncLanguageSwitchUi(nextLanguage) {
-  document.querySelectorAll(".language-switch-shell").forEach((element) => {
-    element.classList.toggle("english-active", nextLanguage === "en");
-    element.classList.toggle("myanmar-active", nextLanguage !== "en");
-  });
+  const isEnglish = nextLanguage === "en";
 
-  document.querySelectorAll("[data-language-switch]").forEach((button) => {
-    const isActive = button.dataset.languageSwitch === nextLanguage;
-    button.classList.toggle("active", isActive);
-    button.setAttribute("aria-pressed", String(isActive));
+  document.querySelectorAll(".lang-picker").forEach((picker) => {
+    picker.dataset.lang = nextLanguage;
+    // Close dropdown
+    picker.classList.remove("open");
+    const trigger = picker.querySelector(".lang-picker-trigger");
+    if (trigger) trigger.setAttribute("aria-expanded", "false");
+    // Swap trigger flag
+    const triggerFlag = picker.querySelector(".lang-picker-trigger-flag");
+    if (triggerFlag) {
+      triggerFlag.className = `lang-picker-trigger-flag language-flag ${isEnglish ? "english-flag" : "myanmar-flag"}`;
+    }
+    // Swap trigger label
+    const label = picker.querySelector(".lang-picker-label");
+    if (label) label.textContent = isEnglish ? "EN" : "MY";
+    // Toggle option active states
+    picker.querySelectorAll(".lang-picker-option").forEach((opt) => {
+      const active = opt.dataset.languageSwitch === nextLanguage;
+      opt.classList.toggle("active", active);
+      opt.setAttribute("aria-selected", String(active));
+    });
   });
 }
 
@@ -405,26 +419,34 @@ function translateRole(value) {
 
 function renderLanguageSelect(selectId) {
   const isEnglish = state.language === "en";
+  const chevronSvg = `<svg class="lang-picker-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const checkSvg = `<svg width="13" height="13" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2 6.4L4.45 8.85L10 3.3" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   return `
-    <div id="${selectId}" class="language-switch-shell ${isEnglish ? "english-active" : "myanmar-active"}" role="group" aria-label="Language">
-      <span class="language-switch-thumb" aria-hidden="true">
-        <span class="language-switch-thumb-flag language-switch-thumb-flag-myanmar">
-          <span class="language-flag myanmar-flag"></span>
-        </span>
-        <span class="language-switch-thumb-flag language-switch-thumb-flag-english">
-          <span class="language-flag english-flag"></span>
-        </span>
-      </span>
-      <button class="language-switch-option language-switch-option-myanmar ${state.language === "my" ? "active" : ""}" data-language-switch="my" type="button" aria-pressed="${state.language === "my"}" title="${t("languageBurmese")}">
-        <span class="language-switch-option-flag">
-          <span class="language-flag myanmar-flag"></span>
-        </span>
+    <div id="${selectId}" class="lang-picker" data-lang="${state.language}">
+      <button class="lang-picker-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Switch language">
+        <span class="lang-picker-trigger-flag language-flag ${isEnglish ? "english-flag" : "myanmar-flag"}"></span>
+        <span class="lang-picker-label">${isEnglish ? "EN" : "MY"}</span>
+        ${chevronSvg}
       </button>
-      <button class="language-switch-option language-switch-option-english ${state.language === "en" ? "active" : ""}" data-language-switch="en" type="button" aria-pressed="${state.language === "en"}" title="${t("languageEnglish")}">
-        <span class="language-switch-option-flag">
-          <span class="language-flag english-flag"></span>
-        </span>
-      </button>
+      <div class="lang-picker-dropdown" role="listbox" aria-label="Language">
+        <p class="lang-picker-header">LANGUAGE / ဘာသာစကား</p>
+        <button class="lang-picker-option ${!isEnglish ? "active" : ""}" data-language-switch="my" role="option" aria-selected="${!isEnglish}" type="button">
+          <span class="language-flag myanmar-flag lang-picker-option-flag"></span>
+          <span class="lang-picker-option-text">
+            <strong>မြန်မာ</strong>
+            <small>Myanmar</small>
+          </span>
+          <span class="lang-picker-option-check">${checkSvg}</span>
+        </button>
+        <button class="lang-picker-option ${isEnglish ? "active" : ""}" data-language-switch="en" role="option" aria-selected="${isEnglish}" type="button">
+          <span class="language-flag english-flag lang-picker-option-flag"></span>
+          <span class="lang-picker-option-text">
+            <strong>English</strong>
+            <small>English</small>
+          </span>
+          <span class="lang-picker-option-check">${checkSvg}</span>
+        </button>
+      </div>
     </div>
   `;
 }
@@ -657,6 +679,8 @@ function renderDashboard(user) {
       </header>
       </div>
 
+      <div class="app-body">
+      ${renderSidebar(isAdmin)}
       <div class="dashboard-shell navbar-layout">
       <main class="content">
         <header class="topbar">
@@ -691,37 +715,82 @@ function renderDashboard(user) {
         </header>
 
         <section class="stats-grid dashboard-stats-section">
-          <article class="stat-card">
-            <span>${t("totalTransactions")}</span>
-            <strong>${summary.count}</strong>
+          <article class="stat-card stat-card--count">
+            <div class="stat-card-inner">
+              <div class="stat-card-icon">${getStatIcon("count")}</div>
+              <div class="stat-card-text">
+                <span>${t("totalTransactions")}</span>
+                <strong>${summary.count}</strong>
+              </div>
+            </div>
           </article>
-          <article class="stat-card">
-            <span>${t("totalAmount")}</span>
-            <strong>${formatAmount(summary.amount)}</strong>
+          <article class="stat-card stat-card--total">
+            <div class="stat-card-inner">
+              <div class="stat-card-icon">${getStatIcon("amount")}</div>
+              <div class="stat-card-text">
+                <span>${t("totalAmount")}</span>
+                <strong>${formatAmount(summary.amount)}</strong>
+              </div>
+            </div>
           </article>
-          <article class="stat-card">
-            <span>${t("withdrawAmount")}</span>
-            <strong>${formatAmount(summary.byType["ငွေထုတ်"] ? summary.byType["ငွေထုတ်"].amount : 0)}</strong>
+          <article class="stat-card stat-card--withdraw">
+            <div class="stat-card-inner">
+              <div class="stat-card-icon">${getStatIcon("withdraw")}</div>
+              <div class="stat-card-text">
+                <span>${t("withdrawAmount")}</span>
+                <strong>${formatAmount(summary.byType["ငွေထုတ်"] ? summary.byType["ငွေထုတ်"].amount : 0)}</strong>
+              </div>
+            </div>
           </article>
-          <article class="stat-card">
-            <span>${t("depositAmount")}</span>
-            <strong>${formatAmount(summary.byType["ငွေသွင်း"] ? summary.byType["ငွေသွင်း"].amount : 0)}</strong>
+          <article class="stat-card stat-card--deposit">
+            <div class="stat-card-inner">
+              <div class="stat-card-icon">${getStatIcon("deposit")}</div>
+              <div class="stat-card-text">
+                <span>${t("depositAmount")}</span>
+                <strong>${formatAmount(summary.byType["ငွေသွင်း"] ? summary.byType["ငွေသွင်း"].amount : 0)}</strong>
+              </div>
+            </div>
           </article>
-          <article class="stat-card accent">
-            <span>${escapeHtml(dateProfitLabel)}</span>
-            <strong>${isAdmin ? formatProfit(dateProfitSummary.profit) : t("adminOnly")}</strong>
+          <article class="stat-card stat-card--profit">
+            <div class="stat-card-inner">
+              <div class="stat-card-icon">${getStatIcon("profit")}</div>
+              <div class="stat-card-text">
+                <span>${escapeHtml(dateProfitLabel)}</span>
+                <strong>${isAdmin ? formatProfit(dateProfitSummary.profit) : t("adminOnly")}</strong>
+              </div>
+            </div>
           </article>
           ${isAdmin ? `
-            <article class="stat-card accent total-profit-card">
-              <span>${t("totalProfit")}</span>
-              <strong>${formatProfit(summary.profit)}</strong>
+            <article class="stat-card stat-card--profit total-profit-card">
+              <div class="stat-card-inner">
+                <div class="stat-card-icon">${getStatIcon("profit")}</div>
+                <div class="stat-card-text">
+                  <span>${t("totalProfit")}</span>
+                  <strong>${formatProfit(summary.profit)}</strong>
+                </div>
+              </div>
             </article>
           ` : `
-            <article class="stat-card restricted total-profit-card">
-              <span>${t("totalProfit")}</span>
-              <strong>${t("adminOnly")}</strong>
+            <article class="stat-card total-profit-card">
+              <div class="stat-card-inner">
+                <div class="stat-card-icon">${getStatIcon("lock")}</div>
+                <div class="stat-card-text">
+                  <span>${t("totalProfit")}</span>
+                  <strong>${t("adminOnly")}</strong>
+                </div>
+              </div>
             </article>
           `}
+        </section>
+
+        <section class="panel chart-section">
+          <div class="section-heading">
+            <h2>Daily Transaction Trend</h2>
+            <p>Deposit vs Withdraw volumes for the past 7 days.</p>
+          </div>
+          <div class="chart-canvas-wrap">
+            <canvas id="dailyTrendChart"></canvas>
+          </div>
         </section>
 
         ${isAdmin ? `
@@ -912,6 +981,7 @@ function renderDashboard(user) {
       ${renderDeleteConfirmModal()}
       ${renderDuplicateConfirmModal()}
       </div>
+      </div>
     </div>
   `;
 }
@@ -1056,6 +1126,52 @@ function bindEvents() {
   bindDashboardEvents();
 }
 
+function bindLangPickerEvents() {
+  if (languagePickerEventsBound) {
+    return;
+  }
+  languagePickerEventsBound = true;
+
+  document.addEventListener("click", (event) => {
+    const trigger = event.target.closest(".lang-picker-trigger");
+    if (trigger) {
+      event.preventDefault();
+      const picker = trigger.closest(".lang-picker");
+      if (!picker) {
+        return;
+      }
+      const shouldOpen = !picker.classList.contains("open");
+      closeLanguagePickers(picker);
+      picker.classList.toggle("open", shouldOpen);
+      trigger.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+      return;
+    }
+
+    const option = event.target.closest(".lang-picker-option[data-language-switch]");
+    if (option) {
+      event.preventDefault();
+      closeLanguagePickers();
+      setLanguage(option.dataset.languageSwitch);
+      return;
+    }
+
+    closeLanguagePickers();
+  }, true);
+}
+
+function closeLanguagePickers(exceptPicker = null) {
+  document.querySelectorAll(".lang-picker.open").forEach((picker) => {
+    if (picker === exceptPicker) {
+      return;
+    }
+    picker.classList.remove("open");
+    const trigger = picker.querySelector(".lang-picker-trigger");
+    if (trigger) {
+      trigger.setAttribute("aria-expanded", "false");
+    }
+  });
+}
+
 function bindAuthEvents() {
   const loginForm = document.getElementById("loginForm");
   const signupForm = document.getElementById("signupForm");
@@ -1140,11 +1256,7 @@ function bindAuthEvents() {
     themeToggleAuth.addEventListener("click", toggleTheme);
   }
 
-  document.querySelectorAll("[data-language-switch]").forEach((button) => {
-    button.addEventListener("click", () => {
-      setLanguage(button.dataset.languageSwitch);
-    });
-  });
+  bindLangPickerEvents();
 }
 
 function bindDashboardEvents() {
@@ -1550,11 +1662,7 @@ function bindDashboardEvents() {
     });
   }
 
-  document.querySelectorAll("[data-language-switch]").forEach((button) => {
-    button.addEventListener("click", () => {
-      setLanguage(button.dataset.languageSwitch);
-    });
-  });
+  bindLangPickerEvents();
 
   typeToggleButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -1668,6 +1776,30 @@ function bindDashboardEvents() {
   }
 
   updateProfitPreview();
+
+  // Sidebar navigation
+  document.querySelectorAll("[data-sidebar]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      const section = button.dataset.sidebar;
+      document.querySelectorAll("[data-sidebar]").forEach((b) => b.classList.remove("active"));
+      button.classList.add("active");
+
+      const sectionMap = {
+        dashboard: ".dashboard-stats-section",
+        transactions: ".transaction-list-section",
+        reports: ".range-summary-section",
+        trends: ".chart-section"
+      };
+      const target = document.querySelector(sectionMap[section]);
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  });
+
+  // Init chart after DOM is ready
+  initDashboardChart();
 }
 
 function closeModal() {
@@ -3159,3 +3291,167 @@ document.addEventListener("click", () => {
     closeTimeFilterPopover();
   }
 });
+
+// ===== SIDEBAR =====
+function renderSidebar(isAdmin) {
+  return `
+    <aside class="sidebar">
+      <p class="sidebar-section-label">Menu</p>
+      <nav class="sidebar-nav">
+        <button class="sidebar-item active" type="button" data-sidebar="dashboard">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+          </svg>
+          <span>Dashboard</span>
+        </button>
+        <button class="sidebar-item" type="button" data-sidebar="transactions">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M17 1l4 4-4 4"></path>
+            <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+            <path d="M7 23l-4-4 4-4"></path>
+            <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+          </svg>
+          <span>Transactions</span>
+        </button>
+        ${isAdmin ? `
+        <button class="sidebar-item" type="button" data-sidebar="reports">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <line x1="18" y1="20" x2="18" y2="10"></line>
+            <line x1="12" y1="20" x2="12" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="14"></line>
+          </svg>
+          <span>Reports</span>
+        </button>
+        <button class="sidebar-item" type="button" data-sidebar="trends">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+          <span>Trends</span>
+        </button>
+        ` : ""}
+      </nav>
+    </aside>
+  `;
+}
+
+// ===== STAT CARD SVG ICONS =====
+function getStatIcon(type) {
+  const icons = {
+    count: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>`,
+    amount: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>`,
+    withdraw: `<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>`,
+    deposit: `<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>`,
+    profit: `<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>`,
+    lock: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`
+  };
+  return icons[type] || icons.amount;
+}
+
+// ===== DAILY CHART DATA =====
+function getDailyChartData() {
+  const days = [];
+  const deposits = [];
+  const withdraws = [];
+
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(new Date().toLocaleString("en-US", { timeZone: APP_TIME_ZONE }));
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+    const label = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+
+    days.push(label);
+    const dayTxs = state.transactions.filter((tx) => getTransactionDate(tx.createdAt) === dateStr);
+    deposits.push(dayTxs.filter((tx) => tx.type === "ငွေသွင်း").reduce((s, tx) => s + toNumber(tx.amount), 0));
+    withdraws.push(dayTxs.filter((tx) => tx.type === "ငွေထုတ်").reduce((s, tx) => s + toNumber(tx.amount), 0));
+  }
+
+  return { days, deposits, withdraws };
+}
+
+function initDashboardChart() {
+  const canvas = document.getElementById('dailyTrendChart');
+  if (!canvas) return;
+
+  // Destroy existing chart instance to avoid duplicates on re-render
+  if (window.__dailyTrendChart instanceof Chart) {
+    window.__dailyTrendChart.destroy();
+  }
+
+  const { days, deposits, withdraws } = getDailyChartData();
+  const isDark = state.theme === 'dark';
+
+  const gridColor  = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
+  const tickColor  = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
+  const depositColor  = isDark ? 'rgba(127,208,216,0.82)' : 'rgba(31,111,120,0.78)';
+  const withdrawColor = isDark ? 'rgba(220,130,110,0.78)' : 'rgba(178,79,56,0.72)';
+
+  window.__dailyTrendChart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: days,
+      datasets: [
+        {
+          label: state.language === 'en' ? 'Deposit Amount' : 'ငွေသွင်း Amount',
+          data: deposits,
+          backgroundColor: depositColor,
+          borderRadius: 6,
+          borderSkipped: false,
+        },
+        {
+          label: state.language === 'en' ? 'Withdraw Amount' : 'ငွေထုတ် Amount',
+          data: withdraws,
+          backgroundColor: withdrawColor,
+          borderRadius: 6,
+          borderSkipped: false,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          position: 'top',
+          align: 'end',
+          labels: {
+            color: tickColor,
+            boxWidth: 12,
+            boxHeight: 12,
+            borderRadius: 4,
+            useBorderRadius: true,
+            font: { size: 12 }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              return ' ' + ctx.dataset.label + ': ' + formatAmount(ctx.parsed.y);
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: gridColor },
+          ticks: { color: tickColor, font: { size: 11 } }
+        },
+        y: {
+          grid: { color: gridColor },
+          ticks: {
+            color: tickColor,
+            font: { size: 11 },
+            callback: function(value) {
+              if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
+              if (value >= 1000) return (value / 1000).toFixed(0) + 'K';
+              return value;
+            }
+          }
+        }
+      }
+    }
+  });
+}
