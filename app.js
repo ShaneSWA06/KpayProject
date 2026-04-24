@@ -590,76 +590,83 @@ function renderBrandLockup(extraClass = "") {
 }
 
 function renderAuth() {
+  const isLogin = state.authTab === "login";
   return `
-    <main class="auth-shell">
-      <section class="auth-hero">
-        ${renderBrandLockup("hero-brand-lockup")}
-        <h1>${t("counterAppTitle")}</h1>
-        <p>${t("counterAppCopy")}</p>
-        <div class="hero-points">
-          <div><strong>${t("admin")}</strong><span>${t("adminCopy")}</span></div>
-          <div><strong>${t("cashier")}</strong><span>${t("cashierCopy")}</span></div>
-        </div>
-      </section>
+    <main class="auth-page">
 
-      <section class="auth-card">
-        <div class="auth-topbar">
+      <div class="auth-page-controls">
+        ${renderLanguageSelect("languageSelectAuth")}
+        <button id="themeToggleAuth" class="theme-toggle-button icon-only" type="button" aria-label="${getThemeLabel()}">
+          <span class="theme-toggle-icon">${getThemeIconSvg()}</span>
+        </button>
+      </div>
+
+      <div class="auth-center">
+
+        <div class="auth-brand">
+          <div class="auth-brand-badge">${getBrandLogoSvg()}</div>
+          <div class="auth-brand-words">
+            <strong>ZAW KHIN</strong>
+            <span>Taste The Joy</span>
+          </div>
+        </div>
+
+        <section class="auth-card">
           <div class="auth-tabs">
-            <button class="tab-button ${state.authTab === "login" ? "active" : ""}" data-auth-tab="login" type="button">${t("login")}</button>
-            <button class="tab-button ${state.authTab === "signup" ? "active" : ""}" data-auth-tab="signup" type="button">${t("signUp")}</button>
+            <button class="tab-button ${isLogin ? "active" : ""}" data-auth-tab="login" type="button">${t("login")}</button>
+            <button class="tab-button ${!isLogin ? "active" : ""}" data-auth-tab="signup" type="button">${t("signUp")}</button>
           </div>
-          <div class="auth-topbar-actions">
-            ${renderLanguageSelect("languageSelectAuth")}
-            <button id="themeToggleAuth" class="theme-toggle-button icon-only" type="button" aria-label="${getThemeLabel()}" title="${getThemeLabel()}">
-              <span class="theme-toggle-icon">${getThemeIconSvg()}</span>
-            </button>
-          </div>
-        </div>
 
-        <form id="loginForm" class="auth-form ${state.authTab === "login" ? "" : "hidden"}">
-          <h2>${t("welcomeBack")}</h2>
-          <p class="subtle">${t("signInContinue")}</p>
-          <label>
-            <span>${t("username")}</span>
-            <input id="loginUsername" type="text" required>
-          </label>
-          <label>
-            <span>${t("password")}</span>
-            <div class="password-field">
-              <input id="loginPassword" type="password" required>
-              <button class="password-toggle" data-password-toggle="loginPassword" type="button">${t("show")}</button>
+          <form id="loginForm" class="auth-form ${isLogin ? "" : "hidden"}">
+            <div class="auth-form-heading">
+              <h2>${t("welcomeBack")}</h2>
+              <p>${t("signInContinue")}</p>
             </div>
-          </label>
-          <button class="primary-button auth-button" type="submit">${t("login")}</button>
-          <p id="loginMessage" class="form-message"></p>
-          <div id="loginSlowBanner" class="slow-banner" aria-live="polite">
-            <span class="slow-banner-spinner" aria-hidden="true"></span>
-            <span>${state.language === "en" ? "Still connecting — hang tight…" : "ချိတ်ဆက်နေသည် — ခဏစောင့်ပါ…"}</span>
-          </div>
-        </form>
+            <label>
+              <span>${t("username")}</span>
+              <input id="loginUsername" type="text" autocomplete="username" required>
+            </label>
+            <label>
+              <span>${t("password")}</span>
+              <div class="password-field">
+                <input id="loginPassword" type="password" autocomplete="current-password" required>
+                <button class="password-toggle" data-password-toggle="loginPassword" type="button">${t("show")}</button>
+              </div>
+            </label>
+            <button class="primary-button auth-button" type="submit">${t("login")}</button>
+            <p id="loginMessage" class="form-message"></p>
+            <div id="loginSlowBanner" class="slow-banner" aria-live="polite">
+              <span class="slow-banner-spinner" aria-hidden="true"></span>
+              <span>${state.language === "en" ? "Still connecting — hang tight…" : "ချိတ်ဆက်နေသည် — ခဏစောင့်ပါ…"}</span>
+            </div>
+          </form>
 
-        <form id="signupForm" class="auth-form ${state.authTab === "signup" ? "" : "hidden"}">
-          <h2>${t("createAccount")}</h2>
-          <p class="subtle">${t("newSignupsCashierOnly")}</p>
-          <label>
-            <span>${t("fullName")}</span>
-            <input id="signupName" type="text" required>
-          </label>
-          <label>
-            <span>${t("username")}</span>
-            <input id="signupUsername" type="text" required>
-          </label>
-          <label>
-            <span>${t("password")}</span>
-            <div class="password-field">
-              <input id="signupPassword" type="password" required>
-              <button class="password-toggle" data-password-toggle="signupPassword" type="button">${t("show")}</button>
+          <form id="signupForm" class="auth-form ${!isLogin ? "" : "hidden"}">
+            <div class="auth-form-heading">
+              <h2>${t("createAccount")}</h2>
+              <p>${t("newSignupsCashierOnly")}</p>
             </div>
-          </label>
-          <button class="primary-button auth-button" type="submit">${t("createAccountButton")}</button>
-          <p id="signupMessage" class="form-message"></p>
-        </form>
-      </section>
+            <label>
+              <span>${t("fullName")}</span>
+              <input id="signupName" type="text" autocomplete="name" required>
+            </label>
+            <label>
+              <span>${t("username")}</span>
+              <input id="signupUsername" type="text" autocomplete="username" required>
+            </label>
+            <label>
+              <span>${t("password")}</span>
+              <div class="password-field">
+                <input id="signupPassword" type="password" autocomplete="new-password" required>
+                <button class="password-toggle" data-password-toggle="signupPassword" type="button">${t("show")}</button>
+              </div>
+            </label>
+            <button class="primary-button auth-button" type="submit">${t("createAccountButton")}</button>
+            <p id="signupMessage" class="form-message"></p>
+          </form>
+        </section>
+
+      </div>
     </main>
   `;
 }
@@ -684,10 +691,15 @@ function renderDashboard(user) {
       <div class="dashboard-navbar-shell">
       <header class="dashboard-navbar">
         <div class="navbar-brand">${renderBrandLockup()}</div>
-        <button id="navbarMenuButton" class="navbar-menu-button ${state.navMenuOpen ? "active" : ""}" type="button" aria-label="Toggle navigation menu" aria-expanded="${state.navMenuOpen ? "true" : "false"}">
-          ${getHamburgerIconSvg()}
-        </button>
-        <div class="navbar-meta ${state.navMenuOpen ? "menu-open" : ""}">
+        <div class="navbar-right-controls">
+          <button id="themeToggleNavbar" class="theme-toggle-button icon-only navbar-theme-btn" type="button" aria-label="${getThemeLabel()}" title="${getThemeLabel()}">
+            <span class="theme-toggle-icon">${getThemeIconSvg()}</span>
+          </button>
+          <button id="navbarMenuButton" class="navbar-menu-button ${state.navMenuOpen ? "active" : ""}" type="button" aria-label="Toggle navigation menu" aria-expanded="${state.navMenuOpen ? "true" : "false"}">
+            ${getHamburgerIconSvg()}
+          </button>
+        </div>
+        <div class="navbar-meta">
           <div class="navbar-profile">
             <span class="profile-role">${escapeHtml(translateRole(user.role))}</span>
             <div>
@@ -704,6 +716,32 @@ function renderDashboard(user) {
           </div>
         </div>
       </header>
+      </div>
+
+      <!-- Mobile bottom-sheet drawer -->
+      <div id="drawerBackdrop" class="drawer-backdrop ${state.navMenuOpen ? "drawer-backdrop--open" : ""}" aria-hidden="true"></div>
+      <div id="mobileDrawer" class="mobile-drawer ${state.navMenuOpen ? "mobile-drawer--open" : ""}" role="dialog" aria-modal="true" aria-label="Menu">
+        <div class="drawer-handle-bar"></div>
+        <div class="drawer-profile">
+          <div class="drawer-avatar">${escapeHtml(user.fullName.charAt(0).toUpperCase())}</div>
+          <div class="drawer-profile-text">
+            <strong>${escapeHtml(user.fullName)}</strong>
+            <small>@${escapeHtml(user.username)}</small>
+          </div>
+          <span class="drawer-role-badge">${escapeHtml(translateRole(user.role))}</span>
+        </div>
+        <div class="drawer-divider"></div>
+        <div class="drawer-actions">
+          <div class="drawer-action-row">
+            <span class="drawer-action-label">${state.language === "en" ? "Language" : "ဘာသာစကား"}</span>
+            ${renderLanguageSelect("languageSelectDrawer")}
+          </div>
+        </div>
+        <div class="drawer-divider"></div>
+        <button id="drawerLogoutButton" class="drawer-logout-button" type="button">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          ${t("logout")}
+        </button>
       </div>
 
       <div class="app-body">
@@ -891,7 +929,7 @@ function renderDashboard(user) {
           </section>
         ` : ""}
 
-        <section class="panel transaction-list-section">
+        <section class="panel transaction-list-section" id="txSection">
           <div class="section-heading">
             <h2>${t("transactionList")}</h2>
             <p>${t("transactionListCopy")}</p>
@@ -948,7 +986,12 @@ function renderDashboard(user) {
         </section>
       </main>
 
-      <button id="openModalButton" class="fab" type="button" aria-label="${t("createTransactionTitle")}">+</button>
+      <button id="openModalButton" class="fab" type="button" aria-label="${t("createTransactionTitle")}">
+        <span class="fab-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </span>
+        <span class="fab-label">${t("createTransactionTitle")}</span>
+      </button>
 
       <div class="modal-backdrop ${state.modalOpen ? "visible" : ""}" id="modalBackdrop">
         <section class="modal-card">
@@ -1106,16 +1149,21 @@ function renderDateFilterPopover(target) {
 
 function syncNavMenuUi() {
   const navbarMenuButton = document.getElementById("navbarMenuButton");
-  const navbarMeta = document.querySelector(".navbar-meta");
+  const drawer = document.getElementById("mobileDrawer");
+  const backdrop = document.getElementById("drawerBackdrop");
 
   if (navbarMenuButton) {
     navbarMenuButton.classList.toggle("active", state.navMenuOpen);
     navbarMenuButton.setAttribute("aria-expanded", String(state.navMenuOpen));
   }
+  if (drawer)   drawer.classList.toggle("mobile-drawer--open", state.navMenuOpen);
+  if (backdrop) backdrop.classList.toggle("drawer-backdrop--open", state.navMenuOpen);
+  document.body.classList.toggle("drawer-open", state.navMenuOpen);
+}
 
-  if (navbarMeta) {
-    navbarMeta.classList.toggle("menu-open", state.navMenuOpen);
-  }
+function closeDrawer() {
+  state.navMenuOpen = false;
+  syncNavMenuUi();
 }
 
 function getActionIconSvg(type) {
@@ -1151,6 +1199,72 @@ function getActionIconSvg(type) {
 function bindEvents() {
   bindAuthEvents();
   bindDashboardEvents();
+}
+
+// Surgically refresh only the transaction table — no full render()
+function refreshTxSection() {
+  const section = document.getElementById("txSection");
+  if (!section) { render(); return; }
+
+  const user = getCurrentUser();
+  const isAdmin = user && user.role === "admin";
+  const visibleTransactions = getVisibleTransactions();
+  const pagination = getPaginationState(visibleTransactions.length);
+  const paginatedTransactions = visibleTransactions.slice(pagination.startIndex, pagination.endIndex);
+
+  // Update filter button active states
+  const filterMap = {
+    tableScopeToday:     () => state.historyScope === "today" && !state.filterDate,
+    tableScopeAllDates:  () => state.historyScope === "all"   && !state.filterDate,
+    tableFilterAll:      () => state.filterType === "all",
+    tableFilterWithdraw: () => state.filterType === "ငွေထုတ်",
+    tableFilterDeposit:  () => state.filterType === "ငွေသွင်း",
+    tableFilterDuplicated: () => state.filterType === "duplicated"
+  };
+  Object.entries(filterMap).forEach(([id, check]) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle("active-filter", check());
+  });
+
+  // Update pagination controls
+  const prev = document.getElementById("paginationPrevButton");
+  const next = document.getElementById("paginationNextButton");
+  const pageInput = document.getElementById("paginationPageInput");
+  const paginationCopy = section.querySelector(".pagination-copy");
+  const totalPagesEl = section.querySelector(".pagination-page");
+
+  if (prev) prev.disabled = pagination.currentPage === 1;
+  if (next) next.disabled = pagination.currentPage === pagination.totalPages;
+  if (pageInput) { pageInput.value = pagination.currentPage; pageInput.max = pagination.totalPages; }
+  if (totalPagesEl) totalPagesEl.textContent = `${t("of")} ${pagination.totalPages}`;
+  if (paginationCopy) {
+    paginationCopy.textContent = pagination.totalItems
+      ? t("showingTransactions", { start: pagination.startItem, end: pagination.endItem, total: pagination.totalItems })
+      : t("noTransactionsToShow");
+  }
+
+  // Swap only tbody rows
+  const tbody = section.querySelector("tbody");
+  if (tbody) {
+    tbody.innerHTML = renderTransactionRows(paginatedTransactions, isAdmin);
+    // Re-bind row-level events
+    bindTransactionRowEvents();
+  }
+}
+
+function bindTransactionRowEvents() {
+  document.querySelectorAll("[data-action]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const id = button.dataset.id;
+      const action = button.dataset.action;
+      if (action === "delete") { openDeleteConfirm(id); return; }
+      if (action === "edit") {
+        const tx = state.transactions.find((item) => item.id === id);
+        if (tx) openEditModal(tx);
+      }
+      if (action === "details") { openDetailsModal(id); }
+    });
+  });
 }
 
 function bindLangPickerEvents() {
@@ -1498,10 +1612,45 @@ function bindDashboardEvents() {
     });
   }
 
-  if (navbarMeta) {
-    navbarMeta.addEventListener("click", (event) => {
-      event.stopPropagation();
+  // Mobile drawer events
+  const drawerBackdrop = document.getElementById("drawerBackdrop");
+  const drawerLogoutButton = document.getElementById("drawerLogoutButton");
+  const themeToggleDrawer = document.getElementById("themeToggleDrawer");
+
+  if (drawerBackdrop) {
+    drawerBackdrop.addEventListener("click", closeDrawer);
+  }
+
+  if (drawerLogoutButton) {
+    drawerLogoutButton.addEventListener("click", async () => {
+      closeDrawer();
+      try {
+        await api("/api/logout", { method: "POST" });
+      } finally {
+        state.sessionUser = null;
+        state.transactions = [];
+        state.modalOpen = false;
+        state.editingId = "";
+        render();
+      }
     });
+  }
+
+  const themeToggleNavbar = document.getElementById("themeToggleNavbar");
+  if (themeToggleNavbar) {
+    themeToggleNavbar.addEventListener("click", () => {
+      toggleTheme();
+    });
+  }
+
+  // Swipe-down to close drawer
+  let touchStartY = 0;
+  const mobileDrawer = document.getElementById("mobileDrawer");
+  if (mobileDrawer) {
+    mobileDrawer.addEventListener("touchstart", (e) => { touchStartY = e.touches[0].clientY; }, { passive: true });
+    mobileDrawer.addEventListener("touchend", (e) => {
+      if (e.changedTouches[0].clientY - touchStartY > 60) closeDrawer();
+    }, { passive: true });
   }
 
   document.querySelectorAll("[data-calendar-popover]").forEach((popover) => {
@@ -1601,80 +1750,66 @@ function bindDashboardEvents() {
 
   if (tableScopeToday) {
     tableScopeToday.addEventListener("click", () => {
-      if (state.historyScope === "today" && !state.filterDate) {
-        return;
-      }
+      if (state.historyScope === "today" && !state.filterDate) return;
       state.historyScope = "today";
       state.filterDate = "";
       state.currentPage = 1;
-      render();
+      refreshTxSection();
     });
   }
 
   if (tableScopeAllDates) {
     tableScopeAllDates.addEventListener("click", () => {
-      if (state.historyScope === "all" && !state.filterDate) {
-        return;
-      }
+      if (state.historyScope === "all" && !state.filterDate) return;
       state.historyScope = "all";
       state.filterDate = "";
       state.currentPage = 1;
-      render();
+      refreshTxSection();
     });
   }
 
   if (tableFilterAll) {
     tableFilterAll.addEventListener("click", () => {
-      if (state.filterType === "all") {
-        return;
-      }
+      if (state.filterType === "all") return;
       state.filterType = "all";
       state.currentPage = 1;
-      render();
+      refreshTxSection();
     });
   }
 
   if (tableFilterWithdraw) {
     tableFilterWithdraw.addEventListener("click", () => {
-      if (state.filterType === "ငွေထုတ်") {
-        return;
-      }
+      if (state.filterType === "ငွေထုတ်") return;
       state.filterType = "ငွေထုတ်";
       state.currentPage = 1;
-      render();
+      refreshTxSection();
     });
   }
 
   if (tableFilterDeposit) {
     tableFilterDeposit.addEventListener("click", () => {
-      if (state.filterType === "ငွေသွင်း") {
-        return;
-      }
+      if (state.filterType === "ငွေသွင်း") return;
       state.filterType = "ငွေသွင်း";
       state.currentPage = 1;
-      render();
+      refreshTxSection();
     });
   }
 
   if (tableFilterDuplicated) {
     tableFilterDuplicated.addEventListener("click", () => {
-      if (state.filterType === "duplicated") {
-        return;
-      }
+      if (state.filterType === "duplicated") return;
       state.filterType = "duplicated";
       state.currentPage = 1;
-      render();
+      refreshTxSection();
     });
   }
 
   if (paginationPrevButton) {
     paginationPrevButton.addEventListener("click", () => {
       const nextPage = Math.max(1, state.currentPage - 1);
-      if (nextPage === state.currentPage) {
-        return;
-      }
+      if (nextPage === state.currentPage) return;
       state.currentPage = nextPage;
-      render();
+      refreshTxSection();
     });
   }
 
@@ -1682,11 +1817,9 @@ function bindDashboardEvents() {
     paginationNextButton.addEventListener("click", () => {
       const pagination = getPaginationState(getVisibleTransactions().length);
       const nextPage = Math.min(pagination.totalPages, state.currentPage + 1);
-      if (nextPage === state.currentPage) {
-        return;
-      }
+      if (nextPage === state.currentPage) return;
       state.currentPage = nextPage;
-      render();
+      refreshTxSection();
     });
   }
 
@@ -1698,14 +1831,13 @@ function bindDashboardEvents() {
         paginationPageInput.value = String(state.currentPage);
         return;
       }
-
       const nextPage = Math.min(pagination.totalPages, Math.max(1, Math.trunc(rawValue)));
       if (nextPage === state.currentPage) {
         paginationPageInput.value = String(state.currentPage);
         return;
       }
       state.currentPage = nextPage;
-      render();
+      refreshTxSection();
     };
 
     paginationPageInput.addEventListener("change", applyPageInput);
@@ -1717,12 +1849,7 @@ function bindDashboardEvents() {
     });
   }
 
-  if (themeToggleDashboard) {
-    themeToggleDashboard.addEventListener("click", () => {
-      state.navMenuOpen = false;
-      toggleTheme();
-    });
-  }
+  // theme handled by themeToggleNavbar (always visible in navbar)
 
   bindLangPickerEvents();
 
@@ -3338,8 +3465,12 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-document.addEventListener("click", () => {
+document.addEventListener("click", (event) => {
   if (state.navMenuOpen) {
+    // Only close drawer when clicking outside it (not on its own contents)
+    if (event.target.closest("#mobileDrawer") || event.target.closest("#navbarMenuButton")) {
+      return;
+    }
     state.navMenuOpen = false;
     syncNavMenuUi();
     return;
@@ -3354,163 +3485,88 @@ document.addEventListener("click", () => {
   }
 });
 
+
 // ===== SIDEBAR =====
 function renderSidebar(isAdmin) {
+  const items = [
+    { key: "dashboard",     label: "Dashboard",     icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>' },
+    { key: "transactions",  label: "Transactions",  icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>' },
+    { key: "reports",       label: "Reports",       icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>' },
+    { key: "trends",        label: "Trends",        icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' },
+  ];
+
   return `
     <aside class="sidebar">
-      <p class="sidebar-section-label">Menu</p>
+      <p class="sidebar-section-label">MENU</p>
       <nav class="sidebar-nav">
-        <button class="sidebar-item active" type="button" data-sidebar="dashboard">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
-            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
-            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
-            <rect x="14" y="14" width="7" height="7" rx="1"></rect>
-          </svg>
-          <span>Dashboard</span>
-        </button>
-        <button class="sidebar-item" type="button" data-sidebar="transactions">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M17 1l4 4-4 4"></path>
-            <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
-            <path d="M7 23l-4-4 4-4"></path>
-            <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
-          </svg>
-          <span>Transactions</span>
-        </button>
-        ${isAdmin ? `
-        <button class="sidebar-item" type="button" data-sidebar="reports">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <line x1="18" y1="20" x2="18" y2="10"></line>
-            <line x1="12" y1="20" x2="12" y2="4"></line>
-            <line x1="6" y1="20" x2="6" y2="14"></line>
-          </svg>
-          <span>Reports</span>
-        </button>
-        <button class="sidebar-item" type="button" data-sidebar="trends">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-          </svg>
-          <span>Trends</span>
-        </button>
-        ` : ""}
+        ${items.map((item, i) => `
+          <button class="sidebar-item${i === 0 ? " active" : ""}" data-sidebar="${item.key}" type="button">
+            ${item.icon}
+            <span>${item.label}</span>
+          </button>
+        `).join("")}
       </nav>
     </aside>
   `;
 }
 
-// ===== STAT CARD SVG ICONS =====
+// ===== STAT ICONS =====
 function getStatIcon(type) {
   const icons = {
-    count: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>`,
-    amount: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>`,
-    withdraw: `<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>`,
-    deposit: `<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>`,
-    profit: `<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>`,
-    lock: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>`
+    count:    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
+    amount:   '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>',
+    withdraw: '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>',
+    deposit:  '<svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>',
+    profit:   '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>',
+    lock:     '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>'
   };
   return icons[type] || icons.amount;
 }
 
 // ===== DAILY CHART DATA =====
 function getDailyChartData() {
-  const days = [];
-  const deposits = [];
-  const withdraws = [];
-
+  const days = [], deposits = [], withdraws = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date(new Date().toLocaleString("en-US", { timeZone: APP_TIME_ZONE }));
     d.setDate(d.getDate() - i);
     const dateStr = d.toISOString().slice(0, 10);
-    const label = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-
-    days.push(label);
+    days.push(d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }));
     const dayTxs = state.transactions.filter((tx) => getTransactionDate(tx.createdAt) === dateStr);
     deposits.push(dayTxs.filter((tx) => tx.type === "ငွေသွင်း").reduce((s, tx) => s + toNumber(tx.amount), 0));
     withdraws.push(dayTxs.filter((tx) => tx.type === "ငွေထုတ်").reduce((s, tx) => s + toNumber(tx.amount), 0));
   }
-
   return { days, deposits, withdraws };
 }
 
 function initDashboardChart() {
-  const canvas = document.getElementById('dailyTrendChart');
+  const canvas = document.getElementById("dailyTrendChart");
   if (!canvas) return;
-
-  if (window.__dailyTrendChart instanceof Chart) {
-    window.__dailyTrendChart.destroy();
-  }
-
+  if (window.__dailyTrendChart instanceof Chart) { window.__dailyTrendChart.destroy(); }
   const { days, deposits, withdraws } = getDailyChartData();
-  const isDark = state.theme === 'dark';
-  const gridColor     = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
-  const tickColor     = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
-  const depositColor  = isDark ? 'rgba(127,208,216,0.82)' : 'rgba(31,111,120,0.78)';
-  const withdrawColor = isDark ? 'rgba(220,130,110,0.78)' : 'rgba(178,79,56,0.72)';
-
+  const isDark = state.theme === "dark";
+  const gridColor     = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
+  const tickColor     = isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)";
+  const depositColor  = isDark ? "rgba(127,208,216,0.82)" : "rgba(31,111,120,0.78)";
+  const withdrawColor = isDark ? "rgba(220,130,110,0.78)" : "rgba(178,79,56,0.72)";
   window.__dailyTrendChart = new Chart(canvas, {
-    type: 'bar',
+    type: "bar",
     data: {
       labels: days,
       datasets: [
-        {
-          label: state.language === 'en' ? 'Deposit Amount' : 'Deposit Amount',
-          data: deposits,
-          backgroundColor: depositColor,
-          borderRadius: 6,
-          borderSkipped: false
-        },
-        {
-          label: state.language === 'en' ? 'Withdraw Amount' : 'Withdraw Amount',
-          data: withdraws,
-          backgroundColor: withdrawColor,
-          borderRadius: 6,
-          borderSkipped: false
-        }
+        { label: "Deposit Amount",  data: deposits,  backgroundColor: depositColor,  borderRadius: 6, borderSkipped: false },
+        { label: "Withdraw Amount", data: withdraws, backgroundColor: withdrawColor, borderRadius: 6, borderSkipped: false }
       ]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
       plugins: {
-        legend: {
-          position: 'top',
-          align: 'end',
-          labels: {
-            color: tickColor,
-            boxWidth: 12,
-            boxHeight: 12,
-            borderRadius: 4,
-            useBorderRadius: true,
-            font: { size: 12 }
-          }
-        },
-        tooltip: {
-          callbacks: {
-            label: function(ctx) {
-              return ' ' + ctx.dataset.label + ': ' + formatAmount(ctx.parsed.y);
-            }
-          }
-        }
+        legend: { position: "top", align: "end", labels: { color: tickColor, boxWidth: 12, boxHeight: 12, borderRadius: 4, useBorderRadius: true, font: { size: 12 } } },
+        tooltip: { callbacks: { label: function(ctx) { return " " + ctx.dataset.label + ": " + formatAmount(ctx.parsed.y); } } }
       },
       scales: {
-        x: {
-          grid: { color: gridColor },
-          ticks: { color: tickColor, font: { size: 11 } }
-        },
-        y: {
-          grid: { color: gridColor },
-          ticks: {
-            color: tickColor,
-            font: { size: 11 },
-            callback: function(value) {
-              if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
-              if (value >= 1000) return (value / 1000).toFixed(0) + 'K';
-              return value;
-            }
-          }
-        }
+        x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
+        y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 }, callback: function(v) { if (v>=1000000) return (v/1000000).toFixed(1)+"M"; if (v>=1000) return (v/1000).toFixed(0)+"K"; return v; } } }
       }
     }
   });

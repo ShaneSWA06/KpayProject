@@ -1637,19 +1637,71 @@ tbody tr:hover {
 .fab {
   position: fixed;
   right: 22px;
-  bottom: 22px;
-  width: 58px;
-  height: 58px;
-  border-radius: 18px;
+  bottom: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 22px 0 18px;
+  height: 52px;
+  border-radius: 999px;
   background: var(--primary);
   color: #fff;
-  font-size: 30px;
-  box-shadow: 0 14px 24px rgba(31, 111, 120, 0.22);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 8px 24px rgba(31, 111, 120, 0.30), 0 2px 8px rgba(0,0,0,0.12);
+  transition: background 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
+  white-space: nowrap;
 }
 
 .fab:hover {
   background: var(--primary-hover);
   transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(31, 111, 120, 0.36), 0 4px 12px rgba(0,0,0,0.14);
+}
+
+.fab:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.fab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  flex-shrink: 0;
+}
+
+.fab-label {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* On very small screens collapse to icon-only */
+@media (max-width: 600px) {
+  .fab {
+    width: 54px;
+    height: 54px;
+    padding: 0;
+    border-radius: 18px;
+    justify-content: center;
+    align-items: center;
+    bottom: 20px;
+    right: 16px;
+  }
+  .fab-label { display: none; }
+  .fab-icon {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0;
+  }
 }
 
 .modal-backdrop {
@@ -1660,6 +1712,7 @@ tbody tr:hover {
   justify-content: center;
   padding: 20px;
   background: var(--overlay);
+  z-index: 600;
 }
 
 .modal-backdrop.visible {
@@ -1668,6 +1721,8 @@ tbody tr:hover {
 
 .modal-card {
   width: min(520px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
   border-radius: 24px;
   padding: 20px;
   animation: modalIn 0.22s ease-out;
@@ -1752,11 +1807,23 @@ tbody tr:hover {
   transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
 }
 
-.type-toggle-button:hover {
-  border-color: var(--primary);
+/* Withdraw — red */
+.type-toggle-button[data-transaction-type="ငွေထုတ်"]:hover {
+  border-color: #b24f38;
+  color: #b24f38;
+}
+.type-toggle-button[data-transaction-type="ငွေထုတ်"].active {
+  background: #b24f38;
+  border-color: #b24f38;
+  color: #fff;
 }
 
-.type-toggle-button.active {
+/* Deposit — teal/green */
+.type-toggle-button[data-transaction-type="ငွေသွင်း"]:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.type-toggle-button[data-transaction-type="ငွေသွင်း"].active {
   background: var(--primary);
   border-color: var(--primary);
   color: #fff;
@@ -3408,4 +3475,394 @@ body[data-theme="dark"] .dashboard-navbar .lang-picker-trigger {
   border-top-color: var(--primary);
   animation: btnSpin 0.9s linear infinite;
   flex-shrink: 0;
+}
+
+/* ============================================================
+   MOBILE BOTTOM-SHEET DRAWER
+   ============================================================ */
+
+/* Backdrop */
+.drawer-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s ease;
+}
+.drawer-backdrop--open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Sheet */
+.mobile-drawer {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 401;
+  background: var(--surface);
+  border-radius: 22px 22px 0 0;
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.22);
+  padding: 0 0 env(safe-area-inset-bottom, 16px);
+  transform: translateY(100%);
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+.mobile-drawer--open {
+  transform: translateY(0);
+}
+
+/* Handle bar */
+.drawer-handle-bar {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  margin: 12px auto 20px;
+  opacity: 0.6;
+}
+
+/* Profile row */
+.drawer-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 20px 16px;
+}
+.drawer-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 18px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.drawer-profile-text {
+  flex: 1;
+  min-width: 0;
+}
+.drawer-profile-text strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.drawer-profile-text small {
+  font-size: 12px;
+  color: var(--muted);
+}
+.drawer-role-badge {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+/* Divider */
+.drawer-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0 20px 16px;
+  opacity: 0.6;
+}
+
+/* Action rows */
+.drawer-actions {
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.drawer-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.drawer-action-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* Logout button */
+.drawer-logout-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: calc(100% - 32px);
+  margin: 0 16px 16px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(178, 79, 56, 0.35);
+  background: rgba(178, 79, 56, 0.08);
+  color: #b24f38;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.drawer-logout-button:hover,
+.drawer-logout-button:active {
+  background: rgba(178, 79, 56, 0.15);
+}
+
+/* Show drawer + backdrop only on mobile */
+@media (max-width: 1080px) {
+  .drawer-backdrop,
+  .mobile-drawer {
+    display: block;
+  }
+  /* Prevent body scroll when drawer open */
+  body.drawer-open {
+    overflow: hidden;
+  }
+  /* Hide old desktop navbar-meta on mobile (actions are in drawer) */
+  .navbar-meta {
+    display: none !important;
+  }
+  .navbar-menu-button {
+    display: inline-flex;
+  }
+}
+
+/* ============================================================
+   NAVBAR RIGHT CONTROLS (theme btn + hamburger grouped)
+   ============================================================ */
+.navbar-right-controls {
+  display: none;           /* hidden on desktop — desktop uses navbar-meta */
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* On desktop the theme btn stays inside navbar-meta — hide the navbar one */
+@media (min-width: 1081px) {
+  .navbar-right-controls {
+    display: none;
+  }
+}
+
+@media (max-width: 1080px) {
+  .navbar-right-controls {
+    display: flex;
+  }
+  /* Style the navbar theme btn to match the dark navbar on desktop,
+     but on mobile it sits on whatever navbar bg the phone sees */
+  .navbar-theme-btn {
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.18);
+    color: #fff9ef;
+  }
+  .navbar-theme-btn:hover {
+    background: rgba(255,255,255,0.2);
+  }
+}
+
+/* Lang picker inside drawer — fixed position centered in drawer */
+.drawer-actions .lang-picker {
+  position: static;
+}
+
+.drawer-actions .lang-picker-dropdown {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 90px;
+  top: auto;
+  width: auto;
+  min-width: unset;
+  max-width: unset;
+  transform-origin: bottom center;
+  z-index: 500;
+}
+
+/* ============================================================
+   AUTH PAGE — REDESIGN
+   ============================================================ */
+.auth-page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px 40px;
+  position: relative;
+  background:
+    radial-gradient(ellipse at 20% 10%, rgba(31,111,120,0.18) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 90%, rgba(200,129,58,0.12) 0%, transparent 45%),
+    var(--bg);
+}
+
+/* Top-right controls */
+.auth-page-controls {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 10;
+}
+
+/* Brand lockup */
+.auth-center {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  animation: fadeUp 0.45s ease-out;
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.auth-brand-badge {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #c8813a, #8b4f1e);
+  color: #fff9ef;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 8px 20px rgba(140, 80, 30, 0.35);
+}
+
+.auth-brand-badge svg {
+  width: 34px;
+  height: 34px;
+}
+
+.auth-brand-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.auth-brand-words strong {
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.auth-brand-words span {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Auth card */
+.auth-card {
+  width: 100%;
+  border-radius: 24px;
+  padding: 28px 24px 24px;
+  animation: none;
+}
+
+/* Tab row inside card */
+.auth-card .auth-tabs {
+  display: flex;
+  gap: 6px;
+  background: var(--surface-2);
+  border-radius: 14px;
+  padding: 5px;
+  margin-bottom: 24px;
+}
+
+.auth-card .tab-button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.auth-card .tab-button.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+/* Form heading */
+.auth-form-heading {
+  margin-bottom: 20px;
+}
+
+.auth-form-heading h2 {
+  font-size: 22px;
+  font-weight: 800;
+  margin: 0 0 4px;
+}
+
+.auth-form-heading p {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* Role chips below card */
+.auth-footer-roles {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.auth-role-chip {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.auth-role-chip strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--primary);
+}
+
+.auth-role-chip span {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
 }
