@@ -3181,3 +3181,231 @@ body[data-theme="dark"] .dashboard-navbar .lang-picker-trigger {
   opacity: 1;
   transform: scale(1);
 }
+
+/* ============================================================
+   SPLASH SCREEN
+   ============================================================ */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #2f1a0e;
+  transition: opacity 0.4s ease, visibility 0.4s ease;
+}
+
+.splash--out {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.splash-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  animation: splashIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.splash-logo {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff9ef;
+  animation: splashPulse 1.8s ease-in-out infinite;
+}
+
+.splash-logo svg {
+  width: 44px;
+  height: 44px;
+}
+
+.splash-wordmark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: #fff9ef;
+}
+
+.splash-wordmark strong {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.splash-wordmark span {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+
+.splash-bar-track {
+  width: 140px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.splash-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #c8813a, #f2c57a, #c8813a);
+  background-size: 200% 100%;
+  animation: splashBarSlide 1.4s ease-in-out infinite;
+}
+
+@keyframes splashIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+@keyframes splashPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,249,239,0.12); }
+  50%       { box-shadow: 0 0 0 14px rgba(255,249,239,0); }
+}
+
+@keyframes splashBarSlide {
+  0%   { background-position: 100% 0; width: 20%; }
+  50%  { background-position: 0% 0;   width: 80%; }
+  100% { background-position: 100% 0; width: 20%; }
+}
+
+/* ============================================================
+   PAGE TRANSITION
+   ============================================================ */
+#app {
+  transition: opacity 0.12s ease;
+}
+
+#app.app--fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#app.app--fade-in {
+  animation: fadeIn 0.18s ease both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   LOGIN LOADING STATES
+   ============================================================ */
+
+/* Button spinner */
+.btn--loading {
+  cursor: wait !important;
+  opacity: 0.88;
+  pointer-events: none;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.btn-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2.5px solid rgba(255,255,255,0.35);
+  border-top-color: #fff;
+  animation: btnSpin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes btnSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* Button success */
+.btn--success {
+  background: #2e7d5a !important;
+  border-color: #2e7d5a !important;
+  pointer-events: none;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  animation: btnSuccessPop 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.btn-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  animation: btnCheckIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
+}
+
+@keyframes btnSuccessPop {
+  from { transform: scale(0.96); }
+  to   { transform: scale(1); }
+}
+
+@keyframes btnCheckIn {
+  from { transform: scale(0) rotate(-20deg); opacity: 0; }
+  to   { transform: scale(1) rotate(0deg);   opacity: 1; }
+}
+
+/* Error shake on message */
+@keyframes formShake {
+  0%,100% { transform: translateX(0); }
+  20%      { transform: translateX(-6px); }
+  40%      { transform: translateX(6px); }
+  60%      { transform: translateX(-4px); }
+  80%      { transform: translateX(4px); }
+}
+
+.form-message--shake {
+  animation: formShake 0.45s ease both;
+}
+
+/* Slow-connection banner */
+.slow-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary-soft) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
+  color: var(--text);
+  font-size: 13px;
+  margin-top: 4px;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.slow-banner--visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.slow-banner-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  border-top-color: var(--primary);
+  animation: btnSpin 0.9s linear infinite;
+  flex-shrink: 0;
+}

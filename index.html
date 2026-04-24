@@ -15,6 +15,32 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
+  <!-- Splash screen — hidden by JS once session hydrates -->
+  <div id="splash" class="splash" aria-hidden="true">
+    <div class="splash-inner">
+      <div class="splash-logo">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <g transform="translate(-3 0)">
+            <path fill="currentColor" d="M18 18h6l5 23h18l7-19H27.5l-1.5-7H18z"></path>
+            <circle cx="29" cy="48" r="4.5" fill="currentColor"></circle>
+            <circle cx="45" cy="48" r="4.5" fill="currentColor"></circle>
+            <rect x="30" y="14" width="6" height="8" rx="1.5" fill="currentColor"></rect>
+            <rect x="38" y="12" width="8" height="10" rx="2" fill="currentColor"></rect>
+            <path fill="currentColor" d="M24 20l3-9h7l-2 9z"></path>
+            <path fill="currentColor" d="M47 14h5l-1 8h-5z"></path>
+          </g>
+        </svg>
+      </div>
+      <div class="splash-wordmark">
+        <strong>ZAW KHIN</strong>
+        <span>Taste The Joy</span>
+      </div>
+      <div class="splash-bar-track">
+        <div class="splash-bar"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="app"></div>
   <script src="./app.js"></script>
 </body>

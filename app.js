@@ -451,30 +451,53 @@ function renderLanguageSelect(selectId) {
   `;
 }
 
+// Dismiss the splash screen once (runs only the first time loading finishes)
+let splashDismissed = false;
+function dismissSplash() {
+  if (splashDismissed) return;
+  splashDismissed = true;
+  const splash = document.getElementById("splash");
+  if (!splash) return;
+  splash.classList.add("splash--out");
+  splash.addEventListener("transitionend", () => splash.remove(), { once: true });
+}
+
+// Smooth render: fade out → swap innerHTML → fade in
+let renderPending = false;
 function render() {
   document.body.setAttribute("data-theme", state.theme);
 
-  if (state.loading) {
-    app.innerHTML = `
-      <main class="auth-shell">
-        <section class="auth-hero">
-          ${renderBrandLockup("hero-brand-lockup")}
-          <h1>${t("loadingWorkspace")}</h1>
-          <p>${t("connectingData")}</p>
-        </section>
-        <section class="auth-card">
-          <div class="panel">
-            <p class="subtle">${t("pleaseWait")}</p>
-          </div>
-        </section>
-      </main>
-    `;
-    return;
-  }
+  // While session is hydrating show nothing (splash is visible)
+  if (state.loading) return;
+
+  // Dismiss splash on first real render
+  dismissSplash();
+
+  if (renderPending) return;
+  renderPending = true;
 
   const user = getCurrentUser();
-  app.innerHTML = user ? renderDashboard(user) : renderAuth();
-  bindEvents();
+  const nextHTML = user ? renderDashboard(user) : renderAuth();
+
+  // If app is already populated, fade out then swap
+  if (app.children.length > 0) {
+    app.classList.add("app--fade-out");
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        app.innerHTML = nextHTML;
+        app.classList.remove("app--fade-out");
+        app.classList.add("app--fade-in");
+        bindEvents();
+        renderPending = false;
+        requestAnimationFrame(() => app.classList.remove("app--fade-in"));
+      }, 120); // matches fade-out duration
+    });
+  } else {
+    // First paint — just set content, CSS animation handles fade-in
+    app.innerHTML = nextHTML;
+    bindEvents();
+    renderPending = false;
+  }
 }
 
 function getThemeIconSvg() {
@@ -609,6 +632,10 @@ function renderAuth() {
           </label>
           <button class="primary-button auth-button" type="submit">${t("login")}</button>
           <p id="loginMessage" class="form-message"></p>
+          <div id="loginSlowBanner" class="slow-banner" aria-live="polite">
+            <span class="slow-banner-spinner" aria-hidden="true"></span>
+            <span>${state.language === "en" ? "Still connecting — hang tight…" : "ချိတ်ဆက်နေသည် — ခဏစောင့်ပါ…"}</span>
+          </div>
         </form>
 
         <form id="signupForm" class="auth-form ${state.authTab === "signup" ? "" : "hidden"}">
@@ -1209,19 +1236,54 @@ function bindAuthEvents() {
 
       message.textContent = "";
 
+      // — Lock form —
+      const submitBtn = loginForm.querySelector('[type="submit"]');
+      const inputs = loginForm.querySelectorAll("input");
+      submitBtn.disabled = true;
+      submitBtn.classList.add("btn--loading");
+      submitBtn.innerHTML = `<span class="btn-spinner" aria-hidden="true"></span><span>${state.language === "en" ? "Signing in…" : "ဝင်ရောက်နေသည်…"}</span>`;
+      inputs.forEach((i) => (i.disabled = true));
+
+      // — "Still connecting" banner after 2 s —
+      const slowTimer = setTimeout(() => {
+        const banner = document.getElementById("loginSlowBanner");
+        if (banner) banner.classList.add("slow-banner--visible");
+      }, 2000);
+
       try {
         const payload = await api("/api/login", {
           method: "POST",
           body: JSON.stringify({ username, password })
         });
 
+        clearTimeout(slowTimer);
+
+        // — Success flash —
+        submitBtn.classList.remove("btn--loading");
+        submitBtn.classList.add("btn--success");
+        submitBtn.innerHTML = `<span class="btn-check" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.5 12L13 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>${state.language === "en" ? "Success!" : "အောင်မြင်သည်!"}</span>`;
+
         state.sessionUser = payload.user;
         state.transactions = payload.transactions;
         state.modalOpen = false;
         state.editingId = "";
-        render();
+
+        setTimeout(() => render(), 480);
       } catch (error) {
+        clearTimeout(slowTimer);
+
+        // — Restore form —
+        submitBtn.disabled = false;
+        submitBtn.classList.remove("btn--loading");
+        submitBtn.innerHTML = t("login");
+        inputs.forEach((i) => (i.disabled = false));
+
+        const banner = document.getElementById("loginSlowBanner");
+        if (banner) banner.classList.remove("slow-banner--visible");
+
         message.textContent = error.message;
+        message.classList.add("form-message--shake");
+        setTimeout(() => message.classList.remove("form-message--shake"), 500);
       }
     });
   }
@@ -3375,16 +3437,14 @@ function initDashboardChart() {
   const canvas = document.getElementById('dailyTrendChart');
   if (!canvas) return;
 
-  // Destroy existing chart instance to avoid duplicates on re-render
   if (window.__dailyTrendChart instanceof Chart) {
     window.__dailyTrendChart.destroy();
   }
 
   const { days, deposits, withdraws } = getDailyChartData();
   const isDark = state.theme === 'dark';
-
-  const gridColor  = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
-  const tickColor  = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
+  const gridColor     = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
+  const tickColor     = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
   const depositColor  = isDark ? 'rgba(127,208,216,0.82)' : 'rgba(31,111,120,0.78)';
   const withdrawColor = isDark ? 'rgba(220,130,110,0.78)' : 'rgba(178,79,56,0.72)';
 
@@ -3394,18 +3454,18 @@ function initDashboardChart() {
       labels: days,
       datasets: [
         {
-          label: state.language === 'en' ? 'Deposit Amount' : 'ငွေသွင်း Amount',
+          label: state.language === 'en' ? 'Deposit Amount' : 'Deposit Amount',
           data: deposits,
           backgroundColor: depositColor,
           borderRadius: 6,
-          borderSkipped: false,
+          borderSkipped: false
         },
         {
-          label: state.language === 'en' ? 'Withdraw Amount' : 'ငွေထုတ် Amount',
+          label: state.language === 'en' ? 'Withdraw Amount' : 'Withdraw Amount',
           data: withdraws,
           backgroundColor: withdrawColor,
           borderRadius: 6,
-          borderSkipped: false,
+          borderSkipped: false
         }
       ]
     },
