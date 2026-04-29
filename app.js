@@ -36,7 +36,8 @@ const state = {
   editingId: "",
   authTab: "login",
   loading: true,
-  pendingDuplicate: null
+  pendingDuplicate: null,
+  isSubmittingTransaction: false
 };
 
 const app = document.getElementById("app");
@@ -2634,6 +2635,9 @@ function applyImportedDraft(draft) {
 }
 
 async function submitTransactionForm({ allowDuplicate = false, draft = null } = {}) {
+  // Prevent double-submit: if a request is already in flight, ignore extra clicks
+  if (state.isSubmittingTransaction) return;
+
   const type = draft?.type ?? document.getElementById("transactionType")?.value;
   const customerName = sanitizeCustomerName(draft?.customerName ?? document.getElementById("customerName")?.value);
   const amount = draft?.amount ?? toNumber(document.getElementById("amount")?.value);
@@ -2677,6 +2681,14 @@ async function submitTransactionForm({ allowDuplicate = false, draft = null } = 
 
   clearTransactionMessage(message);
 
+  // Lock the submit button for the duration of the request
+  const submitButton = document.querySelector('#transactionForm button[type="submit"]');
+  state.isSubmittingTransaction = true;
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.classList.add("btn--loading");
+  }
+
   try {
     const endpoint = state.editingId
       ? `/api/transactions/${encodeURIComponent(state.editingId)}`
@@ -2715,6 +2727,13 @@ async function submitTransactionForm({ allowDuplicate = false, draft = null } = 
     }
 
     setTransactionMessage(message, error.message);
+  } finally {
+    // Always unlock so the cashier can retry after an error
+    state.isSubmittingTransaction = false;
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.classList.remove("btn--loading");
+    }
   }
 }
 
