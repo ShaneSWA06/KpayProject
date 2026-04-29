@@ -1996,7 +1996,42 @@ function closeModal() {
   state.modalOpen = false;
   state.editingId = "";
   state.pendingDuplicate = null;
-  render();
+
+  // Fast path: hide the modal via CSS and do surgical DOM updates instead of
+  // a full render(). This avoids the 120ms fade-out + full innerHTML rebuild
+  // which is the main cause of the "laggy" feeling on mobile after saving.
+  const backdrop = document.getElementById("modalBackdrop");
+  if (backdrop) {
+    backdrop.classList.remove("visible");
+    refreshStatCards();
+    refreshTxSection();
+  } else {
+    // Fallback if the modal backdrop isn't in the DOM for any reason
+    render();
+  }
+}
+
+// Surgically update only the numbers inside the stat cards — no full render.
+function refreshStatCards() {
+  const user = getCurrentUser();
+  if (!user) return;
+  const isAdmin = user.role === "admin";
+
+  const visibleTransactions = getVisibleTransactions();
+  const summary = summarizeTransactions(visibleTransactions);
+  const dateProfitSummary = summarizeTransactions(getDateProfitTransactions(visibleTransactions));
+
+  function setText(selector, value) {
+    const el = document.querySelector(selector);
+    if (el) el.textContent = value;
+  }
+
+  setText(".stat-card--count strong",    String(summary.count));
+  setText(".stat-card--total strong",    formatAmount(summary.amount));
+  setText(".stat-card--withdraw strong", formatAmount(summary.byType["ငွေထုတ်"] ? summary.byType["ငွေထုတ်"].amount : 0));
+  setText(".stat-card--deposit strong",  formatAmount(summary.byType["ငွေသွင်း"] ? summary.byType["ငွေသွင်း"].amount : 0));
+  setText(".stat-card--profit strong",   isAdmin ? formatProfit(dateProfitSummary.profit) : t("adminOnly"));
+  setText(".total-profit-card strong",   isAdmin ? formatProfit(summary.profit) : t("adminOnly"));
 }
 
 function toggleCalendarPopover(target = "filter") {
