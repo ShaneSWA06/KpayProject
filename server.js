@@ -1725,13 +1725,4 @@ process.on("SIGTERM", async () => {
   try {
     await pool.end();
   } catch (error) {
-    console.error("[process] Failed to close database pool on SIGTERM", error);
-  } finally {
-    process.exit(0);
-  }
-});
-
-start().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+    console.error("[process]

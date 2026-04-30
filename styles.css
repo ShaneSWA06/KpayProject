@@ -1279,7 +1279,7 @@ body.theme-switching .theme-toggle-icon svg {
 }
 
 .stats-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .closing-summary-grid {
@@ -2074,27 +2074,6 @@ body[data-theme="dark"] .stat-card--profit .stat-card-icon {
   color: #8b7fc8;
 }
 
-/* ===== CHART SECTION ===== */
-.chart-section {
-  margin-top: 0;
-}
-
-/* Hide chart on mobile — too small to be useful */
-@media (max-width: 768px) {
-  .chart-section {
-    display: none;
-  }
-}
-
-.chart-canvas-wrap {
-  margin-top: 16px;
-  position: relative;
-  max-height: 280px;
-}
-
-.chart-canvas-wrap canvas {
-  max-height: 280px;
-}
 
 @keyframes fadeUp {
   from {
@@ -2131,6 +2110,12 @@ body[data-theme="dark"] .stat-card--profit .stat-card-icon {
   .sidebar {
     width: 180px;
     flex: 0 0 180px;
+  }
+}
+
+@media (min-width: 1441px) {
+  .stats-grid .stat-card strong {
+    font-size: 22px;
   }
 }
 
@@ -3022,8 +3007,6 @@ body[data-theme="dark"] .stat-card--profit .stat-card-icon {
     height: calc(100vh - 90px);
   }
 
-  /* === CHANGE 2: Stat cards move to bottom === */
-  .dashboard-stats-section { order: 99; }
 }
 
 /* ============================================================
@@ -3866,3 +3849,4 @@ body[data-theme="dark"] .dashboard-navbar .lang-picker-trigger {
   color: var(--muted);
   line-height: 1.4;
 }
+                                                                                                                                                                                                                                                   

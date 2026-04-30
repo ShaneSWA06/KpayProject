@@ -849,16 +849,6 @@ function renderDashboard(user) {
           `}
         </section>
 
-        <section class="panel chart-section">
-          <div class="section-heading">
-            <h2>Daily Transaction Trend</h2>
-            <p>Deposit vs Withdraw volumes for the past 7 days.</p>
-          </div>
-          <div class="chart-canvas-wrap">
-            <canvas id="dailyTrendChart"></canvas>
-          </div>
-        </section>
-
         ${isAdmin ? `
           <section class="panel compact-panel range-summary-section">
             <div class="section-heading">
@@ -1978,8 +1968,7 @@ function bindDashboardEvents() {
       const sectionMap = {
         dashboard: ".dashboard-stats-section",
         transactions: ".transaction-list-section",
-        reports: ".range-summary-section",
-        trends: ".chart-section"
+        reports: ".range-summary-section"
       };
       const target = document.querySelector(sectionMap[section]);
       if (target) {
@@ -1988,8 +1977,6 @@ function bindDashboardEvents() {
     });
   });
 
-  // Init chart after DOM is ready
-  initDashboardChart();
 }
 
 function closeModal() {
@@ -3546,7 +3533,6 @@ function renderSidebar(isAdmin) {
     { key: "dashboard",     label: "Dashboard",     icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>' },
     { key: "transactions",  label: "Transactions",  icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>' },
     { key: "reports",       label: "Reports",       icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>' },
-    { key: "trends",        label: "Trends",        icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' },
   ];
 
   return `
@@ -3577,51 +3563,4 @@ function getStatIcon(type) {
   return icons[type] || icons.amount;
 }
 
-// ===== DAILY CHART DATA =====
-function getDailyChartData() {
-  const days = [], deposits = [], withdraws = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(new Date().toLocaleString("en-US", { timeZone: APP_TIME_ZONE }));
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().slice(0, 10);
-    days.push(d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }));
-    const dayTxs = state.transactions.filter((tx) => getTransactionDate(tx.createdAt) === dateStr);
-    deposits.push(dayTxs.filter((tx) => tx.type === "ငွေသွင်း").reduce((s, tx) => s + toNumber(tx.amount), 0));
-    withdraws.push(dayTxs.filter((tx) => tx.type === "ငွေထုတ်").reduce((s, tx) => s + toNumber(tx.amount), 0));
-  }
-  return { days, deposits, withdraws };
-}
-
-function initDashboardChart() {
-  const canvas = document.getElementById("dailyTrendChart");
-  if (!canvas) return;
-  if (window.__dailyTrendChart instanceof Chart) { window.__dailyTrendChart.destroy(); }
-  const { days, deposits, withdraws } = getDailyChartData();
-  const isDark = state.theme === "dark";
-  const gridColor     = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)";
-  const tickColor     = isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)";
-  const depositColor  = isDark ? "rgba(127,208,216,0.82)" : "rgba(31,111,120,0.78)";
-  const withdrawColor = isDark ? "rgba(220,130,110,0.78)" : "rgba(178,79,56,0.72)";
-  window.__dailyTrendChart = new Chart(canvas, {
-    type: "bar",
-    data: {
-      labels: days,
-      datasets: [
-        { label: "Deposit Amount",  data: deposits,  backgroundColor: depositColor,  borderRadius: 6, borderSkipped: false },
-        { label: "Withdraw Amount", data: withdraws, backgroundColor: withdrawColor, borderRadius: 6, borderSkipped: false }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      interaction: { mode: "index", intersect: false },
-      plugins: {
-        legend: { position: "top", align: "end", labels: { color: tickColor, boxWidth: 12, boxHeight: 12, borderRadius: 4, useBorderRadius: true, font: { size: 12 } } },
-        tooltip: { callbacks: { label: function(ctx) { return " " + ctx.dataset.label + ": " + formatAmount(ctx.parsed.y); } } }
-      },
-      scales: {
-        x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
-        y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 }, callback: function(v) { if (v>=1000000) return (v/1000000).toFixed(1)+"M"; if (v>=1000) return (v/1000).toFixed(0)+"K"; return v; } } }
-      }
-    }
-  });
-}
+                                  
