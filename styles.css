@@ -1312,8 +1312,10 @@ body.theme-switching .theme-toggle-icon svg {
 .type-card strong {
   display: block;
   margin-top: 10px;
-  font-size: 26px;
+  font-size: 22px;
   line-height: 1.1;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .stat-card.accent {
@@ -2029,6 +2031,41 @@ code {
   min-width: 0;
 }
 
+/* Stats grid: vertical layout so wide numbers don't overflow narrow columns */
+.stats-grid .stat-card-inner {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.stats-grid .stat-card-icon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 10px;
+}
+
+.stats-grid .stat-card-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.stats-grid .stat-card-text {
+  width: 100%;
+}
+
+.stats-grid .stat-card span {
+  font-size: 10px;
+}
+
+.stats-grid .stat-card strong {
+  margin-top: 4px;
+  font-size: clamp(13px, 1.3vw, 18px);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
+
 /* Stat card color variants */
 .stat-card--total {
   border-left: 4px solid var(--primary);
@@ -2110,12 +2147,6 @@ body[data-theme="dark"] .stat-card--profit .stat-card-icon {
   .sidebar {
     width: 180px;
     flex: 0 0 180px;
-  }
-}
-
-@media (min-width: 1441px) {
-  .stats-grid .stat-card strong {
-    font-size: 22px;
   }
 }
 
@@ -3131,17 +3162,52 @@ body[data-theme="dark"] .dashboard-navbar .lang-picker-trigger {
   pointer-events: auto;
 }
 
+.lang-picker-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  padding: 4px 8px 4px 14px;
+}
+
 .lang-picker-header {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--text-soft);
-  padding: 8px 14px 10px;
+  padding: 4px 0 6px;
   margin: 0;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 4px;
+  border-bottom: none;
+  margin-bottom: 0;
   opacity: 0.7;
+}
+
+.lang-picker-close {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 8px;
+  flex: 0 0 32px;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.lang-picker-close:hover {
+  background: var(--bg-accent);
+  color: var(--text);
+}
+
+@media (max-width: 760px) {
+  .lang-picker-close {
+    display: flex;
+  }
 }
 
 /* ---- Option rows ---- */

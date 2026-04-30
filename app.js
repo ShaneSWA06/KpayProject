@@ -430,7 +430,12 @@ function renderLanguageSelect(selectId) {
         ${chevronSvg}
       </button>
       <div class="lang-picker-dropdown" role="listbox" aria-label="Language">
-        <p class="lang-picker-header">LANGUAGE / ဘာသာစကား</p>
+        <div class="lang-picker-header-row">
+          <p class="lang-picker-header">LANGUAGE / ဘာသာစကား</p>
+          <button class="lang-picker-close" type="button" aria-label="Close language picker">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 3L13 13M13 3L3 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </div>
         <button class="lang-picker-option ${!isEnglish ? "active" : ""}" data-language-switch="my" role="option" aria-selected="${!isEnglish}" type="button">
           <span class="language-flag myanmar-flag lang-picker-option-flag"></span>
           <span class="lang-picker-option-text">
@@ -1276,6 +1281,13 @@ function bindLangPickerEvents() {
       closeLanguagePickers(picker);
       picker.classList.toggle("open", shouldOpen);
       trigger.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+      return;
+    }
+
+    const closeBtn = event.target.closest(".lang-picker-close");
+    if (closeBtn) {
+      event.preventDefault();
+      closeLanguagePickers();
       return;
     }
 
@@ -3563,4 +3575,3 @@ function getStatIcon(type) {
   return icons[type] || icons.amount;
 }
 
-                                  
