@@ -15,10 +15,6 @@ const MAX_JSON_BODY_BYTES = 6_000_000;
 const CASHIER_DUPLICATE_BLOCK_WINDOW_MINUTES = 10;
 const root = __dirname;
 const sessions = new Map();
-// Tracks users who have a transaction POST already in flight.
-// Prevents race-condition duplicates when the same user submits multiple
-// requests simultaneously (e.g. rapid button clicks before the page loads).
-const activeTransactionPosts = new Set();
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -187,124 +183,104 @@ async function handleApiRequest(req, res, url) {
     }
 
     if (req.method === "POST") {
-      // Per-user in-flight lock: if this user already has a request being
-      // processed, reject immediately. This closes the race-condition window
-      // where rapid simultaneous clicks all sneak past the duplicate check.
-      if (activeTransactionPosts.has(user.id)) {
-        sendJson(res, 429, { message: "A transaction is already being saved. Please wait a moment." });
-        return;
-      }
-      activeTransactionPosts.add(user.id);
-
-      let body;
-      try {
-        body = await readJsonBody(req);
-      } catch (err) {
-        activeTransactionPosts.delete(user.id);
-        throw err;
-      }
-
+      const body = await readJsonBody(req);
       const type = String(body.type || "");
       const customerName = sanitizeCustomerName(body.customerName);
       const amount = toNumber(body.amount);
       const phoneNumber = String(body.phoneNumber || "").trim();
       const allowDuplicate = Boolean(body.allowDuplicate);
 
-      try {
-        if (!customerName || !isValidCustomerName(customerName) || !["ငွေထုတ်", "ငွေသွင်း"].includes(type)) {
-          sendJson(res, 400, { message: "Valid transaction details are required." });
-          return;
-        }
-
-        if (needsCustomerNameSpaces(customerName)) {
-          sendJson(res, 400, { message: "Please add space btw words for the name." });
-          return;
-        }
-
-        if (amount <= 0) {
-          sendJson(res, 400, { message: "Amount must be greater than 0." });
-          return;
-        }
-
-        if (phoneNumber && !isValidPhoneNumber(phoneNumber)) {
-          sendJson(res, 400, { message: "Phone number must start with 09 and have 9 to 11 digits." });
-          return;
-        }
-
-        const createdAt = nowStamp();
-        const recentCashierDuplicate = user.role === "cashier"
-          ? await findRecentDuplicateTransaction({
-            customerName,
-            phoneNumber,
-            amount,
-            referenceStamp: createdAt,
-            createdById: user.id,
-            windowMinutes: CASHIER_DUPLICATE_BLOCK_WINDOW_MINUTES
-          })
-          : null;
-
-        if (recentCashierDuplicate) {
-          sendJson(res, 409, {
-            message: `This exact transaction was already saved by you within the last ${CASHIER_DUPLICATE_BLOCK_WINDOW_MINUTES} minutes. Please check the list before saving again.`,
-            duplicate: recentCashierDuplicate,
-            canOverride: false,
-            duplicatePolicy: "cashier-block"
-          });
-          return;
-        }
-
-        const duplicate = allowDuplicate
-          ? null
-          : await findSameDayDuplicateTransaction({ customerName, phoneNumber, amount, referenceStamp: createdAt });
-
-        if (duplicate) {
-          sendJson(res, 409, {
-            message: "A similar transaction was already saved on this date.",
-            duplicate,
-            canOverride: true,
-            duplicatePolicy: "same-day-warning"
-          });
-          return;
-        }
-
-        const transaction = {
-          id: `tx-${Date.now()}`,
-          type,
-          customerName,
-          amount,
-          phoneNumber,
-          profit: calculateProfit(type, amount),
-          createdById: user.id,
-          createdByName: user.fullName,
-          createdAt,
-          updatedAt: createdAt
-        };
-
-        await pool.query(
-          `INSERT INTO transactions (
-            id, type, customer_name, amount, phone_number, profit,
-            created_by_id, created_by_name, created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-          [
-            transaction.id,
-            transaction.type,
-            transaction.customerName,
-            transaction.amount,
-            transaction.phoneNumber,
-            transaction.profit,
-            transaction.createdById,
-            transaction.createdByName,
-            transaction.createdAt,
-            transaction.updatedAt
-          ]
-        );
-
-        sendJson(res, 201, { transaction });
+      if (!customerName || !isValidCustomerName(customerName) || !["ငွေထုတ်", "ငွေသွင်း"].includes(type)) {
+        sendJson(res, 400, { message: "Valid transaction details are required." });
         return;
-      } finally {
-        // Always release the lock so the user can submit again
-        activeTransactionPosts.delete(user.id);
       }
+
+      if (needsCustomerNameSpaces(customerName)) {
+        sendJson(res, 400, { message: "Please add space btw words for the name." });
+        return;
+      }
+
+      if (amount <= 0) {
+        sendJson(res, 400, { message: "Amount must be greater than 0." });
+        return;
+      }
+
+      if (phoneNumber && !isValidPhoneNumber(phoneNumber)) {
+        sendJson(res, 400, { message: "Phone number must start with 09 and have 9 to 11 digits." });
+        return;
+      }
+
+      const createdAt = nowStamp();
+      const recentCashierDuplicate = user.role === "cashier"
+        ? await findRecentDuplicateTransaction({
+          customerName,
+          phoneNumber,
+          amount,
+          type,
+          referenceStamp: createdAt,
+          createdById: user.id,
+          windowMinutes: CASHIER_DUPLICATE_BLOCK_WINDOW_MINUTES
+        })
+        : null;
+
+      if (recentCashierDuplicate) {
+        sendJson(res, 409, {
+          message: `This exact transaction was already saved by you within the last ${CASHIER_DUPLICATE_BLOCK_WINDOW_MINUTES} minutes. Please check the list before saving again.`,
+          duplicate: recentCashierDuplicate,
+          canOverride: false,
+          duplicatePolicy: "cashier-block"
+        });
+        return;
+      }
+
+      const duplicate = allowDuplicate
+        ? null
+        : await findSameDayDuplicateTransaction({ customerName, phoneNumber, amount, type, referenceStamp: createdAt });
+
+      if (duplicate) {
+        sendJson(res, 409, {
+          message: "A similar transaction was already saved on this date.",
+          duplicate,
+          canOverride: true,
+          duplicatePolicy: "same-day-warning"
+        });
+        return;
+      }
+
+      const transaction = {
+        id: `tx-${Date.now()}`,
+        type,
+        customerName,
+        amount,
+        phoneNumber,
+        profit: calculateProfit(type, amount),
+        createdById: user.id,
+        createdByName: user.fullName,
+        createdAt,
+        updatedAt: createdAt
+      };
+
+      await pool.query(
+        `INSERT INTO transactions (
+          id, type, customer_name, amount, phone_number, profit,
+          created_by_id, created_by_name, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          transaction.id,
+          transaction.type,
+          transaction.customerName,
+          transaction.amount,
+          transaction.phoneNumber,
+          transaction.profit,
+          transaction.createdById,
+          transaction.createdByName,
+          transaction.createdAt,
+          transaction.updatedAt
+        ]
+      );
+
+      sendJson(res, 201, { transaction });
+      return;
     }
   }
 
@@ -615,7 +591,7 @@ function mapTransactionRow(row) {
   };
 }
 
-async function findSameDayDuplicateTransaction({ customerName, phoneNumber, amount, referenceStamp }) {
+async function findSameDayDuplicateTransaction({ customerName, phoneNumber, amount, type, referenceStamp }) {
   const normalizedCustomerName = normalizeText(customerName);
   const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
   const referenceDate = getStampDate(referenceStamp);
@@ -644,9 +620,10 @@ async function findSameDayDuplicateTransaction({ customerName, phoneNumber, amou
        AND amount = $2
        AND regexp_replace(phone_number, '[^0-9]', '', 'g') = $3
        AND left(created_at, 10) = $4
+       AND type = $5
      ORDER BY created_at DESC
      LIMIT 5`,
-    [normalizedCustomerName, amount, normalizedPhoneNumber, referenceDate]
+    [normalizedCustomerName, amount, normalizedPhoneNumber, referenceDate, type]
   );
 
   for (const row of result.rows) {
@@ -656,7 +633,7 @@ async function findSameDayDuplicateTransaction({ customerName, phoneNumber, amou
   return null;
 }
 
-async function findRecentDuplicateTransaction({ customerName, phoneNumber, amount, referenceStamp, createdById, windowMinutes }) {
+async function findRecentDuplicateTransaction({ customerName, phoneNumber, amount, type, referenceStamp, createdById, windowMinutes }) {
   const normalizedCustomerName = normalizeText(customerName);
   const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
   const referenceDate = getStampDate(referenceStamp);
@@ -688,9 +665,10 @@ async function findRecentDuplicateTransaction({ customerName, phoneNumber, amoun
        AND regexp_replace(phone_number, '[^0-9]', '', 'g') = $3
        AND created_by_id = $4
        AND left(created_at, 10) = $5
+       AND type = $6
      ORDER BY created_at DESC
      LIMIT 10`,
-    [normalizedCustomerName, amount, normalizedPhoneNumber, createdById, referenceDate]
+    [normalizedCustomerName, amount, normalizedPhoneNumber, createdById, referenceDate, type]
   );
 
   for (const row of result.rows) {
